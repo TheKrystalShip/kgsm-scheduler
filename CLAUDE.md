@@ -31,7 +31,11 @@ owns autostart + crash-restart + CPU/mem caps. See `tks/server-settings-plan.md`
 - `src/Scheduler/StatusSocketServer.cs` — `BackgroundService` that serves the current
   status snapshot as one NDJSON line per connection over a unix socket. Health =
   connect + parse.
-- `src/Scheduler/SchedulerOptions.cs` — env-driven config (`KGSM_SCHEDULER_*`).
+- `src/Scheduler/SchedulerOptions.cs` — pure POCO with defaults; bound from
+  `IConfiguration` (`KGSM_SCHEDULER_*` keys) via `IOptions<SchedulerOptions>`.
+- `kgsm-scheduler.settings.json` — default config values (same keys as env vars). Copied to
+  publish output. Env vars win over file values.
+- `CONFIGURATION.md` — full reference for all settings, env vars, and defaults.
 - `src/Scheduler/Json/SchedulerJsonContext.cs` — source-generated JSON context
   (AOT: all serialization goes through this).
 - `systemd/kgsm-scheduler.service`, `deploy/deploy.sh` — service unit + deploy.

@@ -3,18 +3,19 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using TheKrystalShip.Kgsm.Scheduler.Json;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
 internal sealed class StatusSocketServer(
-    SchedulerOptions options,
+    IOptions<SchedulerOptions> options,
     ScheduleRegistry registry,
     ILogger<StatusSocketServer> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        var path = options.StatusSocketPath;
+        var path = options.Value.StatusSocketPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         if (File.Exists(path)) File.Delete(path);
 

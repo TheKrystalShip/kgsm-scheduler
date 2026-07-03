@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using TheKrystalShip.KGSM.Core.Interfaces;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
@@ -29,16 +30,16 @@ internal sealed record ScheduleState(
 internal sealed class SchedulerEngine(
     IInstanceService instances,
     IWatchdogClient watchdog,
-    SchedulerOptions options,
+    IOptions<SchedulerOptions> options,
     ScheduleRegistry registry,
     ILogger<SchedulerEngine> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         logger.LogInformation("Scheduler engine started (poll={Poll}s, grace={Grace}min)",
-            options.PollIntervalSeconds, options.GraceWindowMinutes);
+            options.Value.PollIntervalSeconds, options.Value.GraceWindowMinutes);
 
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(options.PollIntervalSeconds));
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(options.Value.PollIntervalSeconds));
         do
         {
             try { await TickAsync(ct).ConfigureAwait(false); }
@@ -76,11 +77,11 @@ internal sealed class SchedulerEngine(
             if (nextFire.HasValue && nextFire.Value <= now)
             {
                 var overdue = now - nextFire.Value;
-                if (overdue.TotalMinutes > options.GraceWindowMinutes)
+                if (overdue.TotalMinutes > options.Value.GraceWindowMinutes)
                 {
                     logger.LogInformation(
                         "{Instance}: skipping missed {Cadence} restart (overdue {Min:F0}min > grace {Grace}min)",
-                        name, cadence, overdue.TotalMinutes, options.GraceWindowMinutes);
+                        name, cadence, overdue.TotalMinutes, options.Value.GraceWindowMinutes);
                 }
                 else
                 {

@@ -1,31 +1,62 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using TheKrystalShip.KGSM.Extensions;
 using TheKrystalShip.Kgsm.Scheduler;
 
-var options = new SchedulerOptions();
+namespace TheKrystalShip.Kgsm.Scheduler;
 
-if (string.IsNullOrEmpty(options.KgsmPath) || !File.Exists(options.KgsmPath))
+internal sealed class Program
 {
-    Console.Error.WriteLine($"[FATAL] kgsm not found at '{options.KgsmPath}'. Set KGSM_SCHEDULER_KGSM_PATH.");
-    return 1;
+    static async Task<int> Main(string[] args)
+    {
+        var builder = Host.CreateApplicationBuilder(args);
+
+        builder.Configuration
+            .AddJsonFile("kgsm-scheduler.settings.json", optional: true, reloadOnChange: false)
+            .AddEnvironmentVariables();
+
+        builder.Services.AddSingleton<IOptions<SchedulerOptions>>(sp =>
+        {
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            return Options.Create(new SchedulerOptions
+            {
+                KgsmPath = cfg["KGSM_SCHEDULER_KGSM_PATH"] ?? "/usr/bin/kgsm",
+                KgsmSocketPath = cfg["KGSM_SCHEDULER_KGSM_SOCKET"] ?? "/run/kgsm/events.sock",
+                WatchdogSocketPath = cfg["KGSM_SCHEDULER_WATCHDOG_SOCKET"] ?? "/run/kgsm-watchdog/control.sock",
+                StatusSocketPath = cfg["KGSM_SCHEDULER_STATUS_SOCKET"] ?? "/run/kgsm-scheduler/status.sock",
+                PollIntervalSeconds = int.TryParse(cfg["KGSM_SCHEDULER_POLL_INTERVAL"], out var p) ? p : 60,
+                GraceWindowMinutes = int.TryParse(cfg["KGSM_SCHEDULER_GRACE_WINDOW_MINUTES"], out var g) ? g : 10,
+            });
+        });
+
+        builder.Logging.ClearProviders();
+        builder.Logging.AddSystemdConsole();
+
+        builder.Services.AddSingleton<ScheduleRegistry>();
+
+        var options = builder.Configuration;
+        builder.Services.AddKgsmServices(
+            options["KGSM_SCHEDULER_KGSM_PATH"] ?? "/usr/bin/kgsm",
+            options["KGSM_SCHEDULER_KGSM_SOCKET"] ?? "/run/kgsm/events.sock");
+        builder.Services.AddKgsmWatchdogClient(
+            options["KGSM_SCHEDULER_WATCHDOG_SOCKET"] ?? "/run/kgsm-watchdog/control.sock");
+
+        builder.Services.AddHostedService<SchedulerEngine>();
+        builder.Services.AddHostedService<StatusSocketServer>();
+
+        var host = builder.Build();
+
+        var schedulerOptions = host.Services.GetRequiredService<IOptions<SchedulerOptions>>().Value;
+        if (string.IsNullOrEmpty(schedulerOptions.KgsmPath) || !File.Exists(schedulerOptions.KgsmPath))
+        {
+            Console.Error.WriteLine($"[FATAL] kgsm not found at '{schedulerOptions.KgsmPath}'. Set KGSM_SCHEDULER_KGSM_PATH.");
+            return 1;
+        }
+
+        await host.RunAsync();
+        return 0;
+    }
 }
-
-var builder = Host.CreateApplicationBuilder(args);
-builder.Logging.ClearProviders();
-builder.Logging.AddSystemdConsole();
-
-builder.Services.AddSingleton(options);
-builder.Services.AddSingleton<ScheduleRegistry>();
-
-// kgsm-lib: instance service (reads schedule config from kgsm) + watchdog client (issues restarts)
-builder.Services.AddKgsmServices(options.KgsmPath, options.KgsmSocketPath);
-builder.Services.AddKgsmWatchdogClient(options.WatchdogSocketPath);
-
-builder.Services.AddHostedService<SchedulerEngine>();
-builder.Services.AddHostedService<StatusSocketServer>();
-
-var host = builder.Build();
-await host.RunAsync();
-return 0;
