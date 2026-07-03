@@ -14,7 +14,10 @@ internal sealed record SchedulerInstanceStatus(
     DateTimeOffset? NextFireUtc,
     DateTimeOffset? LastRunUtc,
     bool? LastRunOk,
-    string? LastRunMessage
+    string? LastRunMessage,
+    DateTimeOffset? LastBackupUtc = null,
+    bool? LastBackupOk = null,
+    string? LastBackupMessage = null
 );
 
 internal sealed record SchedulerStatusResponse(
@@ -25,7 +28,10 @@ internal sealed record SchedulerStatusResponse(
 internal sealed record ScheduleState(
     DateTimeOffset? LastRunUtc,
     bool? LastRunOk,
-    string? LastRunMessage);
+    string? LastRunMessage,
+    DateTimeOffset? LastBackupUtc = null,
+    bool? LastBackupOk = null,
+    string? LastBackupMessage = null);
 
 internal sealed class SchedulerEngine(
     IInstanceService instances,
@@ -73,6 +79,9 @@ internal sealed class SchedulerEngine(
             DateTimeOffset? lastRunUtc = existing?.LastRunUtc;
             bool? lastRunOk = existing?.LastRunOk;
             string? lastRunMsg = existing?.LastRunMessage;
+            DateTimeOffset? lastBackupUtc = existing?.LastBackupUtc;
+            bool? lastBackupOk = existing?.LastBackupOk;
+            string? lastBackupMsg = existing?.LastBackupMessage;
 
             if (nextFire.HasValue && nextFire.Value <= now)
             {
@@ -82,6 +91,23 @@ internal sealed class SchedulerEngine(
                     logger.LogInformation(
                         "{Instance}: skipping missed {Cadence} restart (overdue {Min:F0}min > grace {Grace}min)",
                         name, cadence, overdue.TotalMinutes, options.Value.GraceWindowMinutes);
+                }
+                else if (instance.AutoBackupOnRestart == true)
+                {
+                    var backup = await FireBackupRestartAsync(name, instance.BackupRetention ?? 5, ct)
+                        .ConfigureAwait(false);
+                    lastRunUtc = backup.LastRunUtc;
+                    lastRunOk = backup.LastRunOk;
+                    lastRunMsg = backup.LastRunMessage;
+                    if (backup.LastBackupUtc.HasValue)
+                    {
+                        lastBackupUtc = backup.LastBackupUtc;
+                        lastBackupOk = backup.LastBackupOk;
+                        lastBackupMsg = backup.LastBackupMessage;
+                    }
+                    // Advance next-fire PAST now so we don't re-fire next tick
+                    nextFire = ComputeNextFire(cadence, instance.RestartTime, instance.RestartDay, tz,
+                        now + TimeSpan.FromMinutes(1));
                 }
                 else
                 {
@@ -111,12 +137,76 @@ internal sealed class SchedulerEngine(
             statuses.Add(new SchedulerInstanceStatus(
                 name, cadence, instance.RestartTime, instance.RestartDay, instance.Timezone,
                 nextFire.HasValue ? new DateTimeOffset(nextFire.Value, TimeSpan.Zero) : null,
-                lastRunUtc, lastRunOk, lastRunMsg));
+                lastRunUtc, lastRunOk, lastRunMsg,
+                lastBackupUtc, lastBackupOk, lastBackupMsg));
 
-            registry.Set(name, new ScheduleState(lastRunUtc, lastRunOk, lastRunMsg));
+            registry.Set(name, new ScheduleState(
+                lastRunUtc, lastRunOk, lastRunMsg,
+                lastBackupUtc, lastBackupOk, lastBackupMsg));
         }
 
         registry.Snapshot = new SchedulerStatusResponse(statuses);
+    }
+
+    private readonly record struct BackupRestartOutcome(
+        DateTimeOffset? LastRunUtc,
+        bool? LastRunOk,
+        string? LastRunMessage,
+        DateTimeOffset? LastBackupUtc,
+        bool? LastBackupOk,
+        string? LastBackupMessage);
+
+    /// <summary>
+    /// Scheduled restart WITH auto-backup: Stop → drain → CreateBackup → PruneBackups → Start.
+    /// A failed backup is logged but never blocks the Start — the instance must not be left
+    /// permanently stopped. A failed Stop aborts before any backup is attempted.
+    /// </summary>
+    private async Task<BackupRestartOutcome> FireBackupRestartAsync(string name, int retention, CancellationToken ct)
+    {
+        try
+        {
+            logger.LogInformation("{Instance}: stopping for scheduled backup+restart", name);
+            var stopResult = await watchdog.StopAsync(name, ct).ConfigureAwait(false);
+            if (!stopResult.Ok)
+            {
+                logger.LogWarning("{Instance}: backup+restart aborted — stop failed: {Msg}", name, stopResult.Message);
+                return new(DateTimeOffset.UtcNow, false, $"backup+restart: stop failed: {stopResult.Message}",
+                    null, null, null);
+            }
+
+            // Brief drain so the process is fully down before we snapshot its files.
+            await Task.Delay(TimeSpan.FromSeconds(3), ct).ConfigureAwait(false);
+
+            logger.LogInformation("{Instance}: creating scheduled backup", name);
+            var backupResult = instances.CreateBackup(name, actor: "scheduler", origin: "scheduler");
+            bool backupOk = backupResult.ExitCode == 0;
+            if (!backupOk)
+                logger.LogWarning("{Instance}: scheduled backup failed: {Err}", name, backupResult.Stderr);
+
+            if (retention > 0)
+            {
+                var pruneResult = instances.PruneBackups(name, retention, actor: "scheduler", origin: "scheduler");
+                if (pruneResult.ExitCode != 0)
+                    logger.LogWarning("{Instance}: backup prune failed: {Err}", name, pruneResult.Stderr);
+            }
+
+            logger.LogInformation("{Instance}: starting after scheduled backup (backupOk={Ok})", name, backupOk);
+            var startResult = await watchdog.StartAsync(name, ct).ConfigureAwait(false);
+            logger.LogInformation("{Instance}: restart {Result} — {Msg}",
+                name, startResult.Ok ? "ok" : "failed", startResult.Message);
+
+            return new(DateTimeOffset.UtcNow, startResult.Ok, startResult.Message,
+                DateTimeOffset.UtcNow, backupOk, backupOk ? null : backupResult.Stderr);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "{Instance}: scheduled backup+restart failed (watchdog unreachable?)", name);
+            return new(DateTimeOffset.UtcNow, false, ex.Message, null, null, null);
+        }
     }
 
     private static TimeZoneInfo ResolveTimezone(string? iana)
