@@ -6,8 +6,6 @@
 
   // Path to the kgsm binary. The scheduler validates this exists at startup.
   "KGSM_SCHEDULER_KGSM_PATH": "/usr/bin/kgsm",
-  // kgsm event socket — used by kgsm-lib's instance service to read schedule config.
-  "KGSM_SCHEDULER_KGSM_SOCKET": "/run/kgsm/events.sock",
   // kgsm-watchdog control socket — scheduler issues restarts through the watchdog.
   "KGSM_SCHEDULER_WATCHDOG_SOCKET": "/run/kgsm-watchdog/control.sock",
   // Status unix socket — serves the NDJSON status snapshot (one line per connect).

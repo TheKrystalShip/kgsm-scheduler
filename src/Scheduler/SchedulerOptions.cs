@@ -3,7 +3,6 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 internal sealed class SchedulerOptions
 {
     public string KgsmPath { get; init; } = "/usr/bin/kgsm";
-    public string KgsmSocketPath { get; init; } = "/run/kgsm/events.sock";
     public string WatchdogSocketPath { get; init; } = "/run/kgsm-watchdog/control.sock";
     public string StatusSocketPath { get; init; } = "/run/kgsm-scheduler/status.sock";
     /// <summary>How often to re-scan instance schedule config (seconds).</summary>

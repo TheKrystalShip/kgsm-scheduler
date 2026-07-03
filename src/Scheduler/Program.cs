@@ -24,7 +24,6 @@ internal sealed class Program
             return Options.Create(new SchedulerOptions
             {
                 KgsmPath = cfg["KGSM_SCHEDULER_KGSM_PATH"] ?? "/usr/bin/kgsm",
-                KgsmSocketPath = cfg["KGSM_SCHEDULER_KGSM_SOCKET"] ?? "/run/kgsm/events.sock",
                 WatchdogSocketPath = cfg["KGSM_SCHEDULER_WATCHDOG_SOCKET"] ?? "/run/kgsm-watchdog/control.sock",
                 StatusSocketPath = cfg["KGSM_SCHEDULER_STATUS_SOCKET"] ?? "/run/kgsm-scheduler/status.sock",
                 PollIntervalSeconds = int.TryParse(cfg["KGSM_SCHEDULER_POLL_INTERVAL"], out var p) ? p : 60,
@@ -38,9 +37,11 @@ internal sealed class Program
         builder.Services.AddSingleton<ScheduleRegistry>();
 
         var options = builder.Configuration;
+        // socketPath is required by the extension but unused — the scheduler reads config
+        // from the filesystem (IInstanceService shells out to kgsm), not from kgsm events.
         builder.Services.AddKgsmServices(
             options["KGSM_SCHEDULER_KGSM_PATH"] ?? "/usr/bin/kgsm",
-            options["KGSM_SCHEDULER_KGSM_SOCKET"] ?? "/run/kgsm/events.sock");
+            "/dev/null");
         builder.Services.AddKgsmWatchdogClient(
             options["KGSM_SCHEDULER_WATCHDOG_SOCKET"] ?? "/run/kgsm-watchdog/control.sock");
 

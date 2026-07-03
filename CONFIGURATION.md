@@ -18,7 +18,6 @@ typed property on `SchedulerOptions`. Defaults are listed under the JSON column.
 | JSON key / Env var | Default | Description |
 |---|---|---|
 | `KGSM_SCHEDULER_KGSM_PATH` | `/usr/bin/kgsm` | Path to the `kgsm` binary. Validated at startup — the daemon refuses to start if this file does not exist. Set the env var or edit the JSON to point at a non-standard install. |
-| `KGSM_SCHEDULER_KGSM_SOCKET` | `/run/kgsm/events.sock` | kgsm event unix socket. Used by kgsm-lib's instance service to read per-instance schedule config (`ScheduledRestart`, `RestartTime`, `RestartDay`, `Timezone`). Must match the socket kgsm binds. |
 | `KGSM_SCHEDULER_WATCHDOG_SOCKET` | `/run/kgsm-watchdog/control.sock` | kgsm-watchdog control unix socket. Scheduler issues atomic restarts through the watchdog — never directly. Must match the watchdog's listen path. |
 | `KGSM_SCHEDULER_STATUS_SOCKET` | `/run/kgsm-scheduler/status.sock` | Status unix socket the scheduler exposes. Serves one NDJSON line per connection with the current schedule snapshot. `kgsm-api` connects here for the `/settings` aggregation. The systemd unit creates the parent directory (`RuntimeDirectory=kgsm-scheduler`). |
 | `KGSM_SCHEDULER_POLL_INTERVAL` | `60` | How often (seconds) to re-scan instance schedule config from kgsm. Lower = more responsive to config changes, higher = less I/O. Floor ~5. |
