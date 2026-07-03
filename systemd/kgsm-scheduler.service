@@ -1,0 +1,18 @@
+[Unit]
+Description=KGSM Scheduler (scheduled restart leaf)
+After=network.target
+
+[Service]
+Type=exec
+User=heisen
+ExecStart=/opt/kgsm-scheduler/kgsm-scheduler
+Restart=always
+RestartSec=5s
+EnvironmentFile=-/etc/kgsm-scheduler/kgsm-scheduler.env
+RuntimeDirectory=kgsm-scheduler
+RuntimeDirectoryMode=0755
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
