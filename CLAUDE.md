@@ -38,7 +38,9 @@ owns autostart + crash-restart + CPU/mem caps. See `tks/server-settings-plan.md`
 - `CONFIGURATION.md` — full reference for all settings, env vars, and defaults.
 - `src/Scheduler/Json/SchedulerJsonContext.cs` — source-generated JSON context
   (AOT: all serialization goes through this).
-- `systemd/kgsm-scheduler.service`, `deploy/deploy.sh` — service unit + deploy.
+- `systemd/kgsm-scheduler.service` — the service unit.
+- `deploy/setup.sh` (once per host, asks for sudo) + `deploy/deploy.sh` (every deploy, no sudo,
+  no prompts) — the ecosystem deploy contract; see `tks/scripts/deploy-template/README.md`.
 
 ## Build
 
