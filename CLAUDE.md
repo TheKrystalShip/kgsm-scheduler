@@ -39,14 +39,37 @@ owns autostart + crash-restart + CPU/mem caps. See `tks/server-settings-plan.md`
 - `src/Scheduler/Json/SchedulerJsonContext.cs` — source-generated JSON context
   (AOT: all serialization goes through this).
 - `systemd/kgsm-scheduler.service` — the service unit.
-- `deploy/setup.sh` (once per host, asks for sudo) + `deploy/deploy.sh` (every deploy, no sudo,
-  no prompts) — the ecosystem deploy contract; see `tks/scripts/deploy-template/README.md`.
+- `deploy/setup.sh` + `deploy/deploy.sh` + `deploy/deploy-common.sh` — see **Deploying** below.
 
 ## Build
 
 ```bash
 dotnet build kgsm-scheduler.slnx
 ```
+
+## Deploying
+
+```bash
+./deploy/setup.sh    # ONCE per host. Asks for sudo. Idempotent, re-runnable.
+./deploy/deploy.sh   # every deploy. NO sudo, NO prompts.
+```
+
+`setup.sh` provisions the host: chowns `/opt/kgsm-scheduler` to you, seeds the env file, puts the
+real unit in **user-owned** `/etc/kgsm-scheduler/systemd/` with
+`/etc/systemd/system/kgsm-scheduler.service` symlinked to it, installs a polkit rule scoped to this
+project's units, enables the unit, then verifies the grant by making the same unprivileged
+`systemctl` calls the deploy will.
+
+That is what makes `deploy.sh` **need no privilege at all**: the prefix is yours so installing the
+AOT binary is a plain file write, a changed unit is a plain file write into the user-owned
+directory, and every `systemctl` verb goes through the polkit grant. It refuses **before building**,
+with *"run `deploy/setup.sh`"*, on an unprovisioned host, and verifies the result by connecting to
+the status socket and reading a line — the daemon's own definition of healthy, not just
+`is-active`. If some *other* operation seems to need root, stop and ask; don't reintroduce `sudo`.
+
+`deploy-common.sh` holds the paths/units/helpers both scripts share. The three files are
+self-contained, so a standalone clone deploys with no other repo checked out; every `kgsm-*` repo
+carries this same pattern.
 
 ## AOT publish (must be 0 ILC warnings)
 
