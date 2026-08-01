@@ -26,8 +26,12 @@ internal sealed class Program
                 KgsmPath = cfg["KGSM_SCHEDULER_KGSM_PATH"] ?? "/usr/bin/kgsm",
                 WatchdogSocketPath = cfg["KGSM_SCHEDULER_WATCHDOG_SOCKET"] ?? "/run/kgsm-watchdog/control.sock",
                 StatusSocketPath = cfg["KGSM_SCHEDULER_STATUS_SOCKET"] ?? "/run/kgsm-scheduler/status.sock",
-                PollIntervalSeconds = int.TryParse(cfg["KGSM_SCHEDULER_POLL_INTERVAL"], out var p) ? p : 60,
-                GraceWindowMinutes = int.TryParse(cfg["KGSM_SCHEDULER_GRACE_WINDOW_MINUTES"], out var g) ? g : 10,
+                PollIntervalSeconds = int.TryParse(cfg["KGSM_SCHEDULER_POLL_INTERVAL"], out var p)
+                    ? Math.Max(p, SchedulerOptions.MinPollIntervalSeconds)
+                    : 60,
+                GraceWindowMinutes = int.TryParse(cfg["KGSM_SCHEDULER_GRACE_WINDOW_MINUTES"], out var g)
+                    ? Math.Max(g, 0)
+                    : 10,
             });
         });
 

@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "id": "scheduler",
+  "displayName": "Scheduler",
+  "unit": "kgsm-scheduler.service",
+  "role": "Fires each server's scheduled restarts and backups at wall-clock time, through the watchdog.",
+  "onDemand": false,
+  "applyMode": "restart",
+  "floorSources": [
+    { "kind": "systemd-unit", "path": "/etc/kgsm-scheduler/systemd/kgsm-scheduler.service" },
+    { "kind": "env-file", "path": "/etc/kgsm-scheduler/kgsm-scheduler.env" },
+    { "kind": "appsettings", "path": "/opt/kgsm-scheduler/kgsm-scheduler.settings.json" }
+  ],
+  "groups": [
+    { "id": "general", "label": "General", "order": 1 },
+    { "id": "wiring", "label": "Connections", "order": 2 },
+    { "id": "timing", "label": "Timing", "order": 3 }
+  ],
+  "fields": [
+    {
+      "key": "logLevel",
+      "env": "Logging__LogLevel__Default",
+      "label": "Log level",
+      "description": "Minimum severity this leaf logs.",
+      "group": "general",
+      "type": "enum",
+      "values": ["Trace", "Debug", "Information", "Warning", "Error", "Critical"],
+      "default": "Information",
+      "risk": "safe"
+    },
+    {
+      "key": "kgsmPath",
+      "env": "KGSM_SCHEDULER_KGSM_PATH",
+      "label": "KGSM executable",
+      "description": "Path to the KGSM executable, which the scheduler reads each server's schedule from. It is checked at startup, and the daemon refuses to run if nothing is there.",
+      "group": "wiring",
+      "type": "path",
+      "default": "/usr/bin/kgsm",
+      "risk": "wiring"
+    },
+    {
+      "key": "watchdogSocket",
+      "env": "KGSM_SCHEDULER_WATCHDOG_SOCKET",
+      "label": "Watchdog control socket",
+      "description": "The watchdog's control socket, which every scheduled restart is issued through. It has to match the path the watchdog listens on, or nothing scheduled ever fires.",
+      "group": "wiring",
+      "type": "path",
+      "default": "/run/kgsm-watchdog/control.sock",
+      "risk": "wiring"
+    },
+    {
+      "key": "statusSocket",
+      "env": "KGSM_SCHEDULER_STATUS_SOCKET",
+      "label": "Status socket",
+      "description": "Unix socket the scheduler serves its schedule snapshot on. The Control Panel reads it here to show what is scheduled and when it last ran.",
+      "group": "wiring",
+      "type": "path",
+      "default": "/run/kgsm-scheduler/status.sock",
+      "risk": "wiring",
+      "pairedApiKey": "KGSM_API_SCHEDULER_SOCKET"
+    },
+    {
+      "key": "pollIntervalSec",
+      "env": "KGSM_SCHEDULER_POLL_INTERVAL",
+      "label": "Schedule re-scan interval",
+      "description": "How often each server's schedule is re-read from KGSM. This bounds how quickly a schedule change takes effect; it does not affect the accuracy of a fire that is already scheduled.",
+      "group": "timing",
+      "type": "int",
+      "default": "60",
+      "min": 5,
+      "unit": "s",
+      "risk": "safe"
+    },
+    {
+      "key": "graceWindowMin",
+      "env": "KGSM_SCHEDULER_GRACE_WINDOW_MINUTES",
+      "label": "Missed-fire grace window",
+      "description": "How late a missed restart may be and still run. Anything later is skipped, so a host that was down does not come back to a burst of catch-up restarts. Zero always runs missed restarts.",
+      "group": "timing",
+      "type": "int",
+      "default": "10",
+      "min": 0,
+      "unit": "min",
+      "risk": "safe"
+    }
+  ]
+}
