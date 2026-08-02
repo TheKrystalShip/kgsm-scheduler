@@ -25,4 +25,20 @@ internal sealed class ScheduleRegistry
     {
         lock (_lock) _states[name] = state;
     }
+
+    /// <summary>
+    /// Applies <paramref name="mutate"/> to an instance's state under the lock and returns the
+    /// result. Scheduled operations run off the tick and finish whenever they finish, so the tick
+    /// and a completing operation both write this record — each must merge into what the other
+    /// left rather than overwrite it with a stale copy.
+    /// </summary>
+    public ScheduleState Update(string name, Func<ScheduleState, ScheduleState> mutate)
+    {
+        lock (_lock)
+        {
+            var updated = mutate(_states.GetValueOrDefault(name) ?? new ScheduleState());
+            _states[name] = updated;
+            return updated;
+        }
+    }
 }

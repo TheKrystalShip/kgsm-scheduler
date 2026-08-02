@@ -4,6 +4,26 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Fixed — scheduled fires actually happen
+- **A schedule now fires.** The engine recomputed "the next fire after now" on every tick and then
+  asked whether that was already due. It never was: a next-fire time is by construction after the
+  instant it was computed from, so the comparison could not come out true and no scheduled restart
+  had ever run. The computed target is now held across ticks and later ticks are compared against
+  it. The target is re-derived when the cadence, time, day or timezone changes, so an edited
+  schedule takes effect on the next tick.
+
+### Changed — backups run on their own cadence
+- **`backup_schedule` / `backup_time` / `backup_day` replace `auto_backup_on_restart`.** A backup
+  is taken against the instance as it is, running or not — kgsm records the state each archive was
+  captured in — so it no longer needs a restart window to happen in. The scheduled backup is a
+  `CreateBackup` + prune, with no stop and no start, and it runs whether or not the instance has a
+  restart schedule at all. The two schedules share only the timezone.
+- **One operation per instance at a time.** A scheduled operation runs off the tick, so a large
+  game's backup cannot hold up every other instance's schedule, and a fire that arrives while that
+  instance is still busy is skipped and recorded rather than queued.
+- The status socket carries `backupSchedule`, `backupTime`, `backupDay` and `nextBackupUtc`
+  alongside the restart schedule.
+
 ### Added — the Control Panel can configure this daemon
 - **`deploy/kgsm-scheduler.leaf.json` declares every setting the scheduler reads** — all five
   `KGSM_SCHEDULER_*` keys plus the standard logging level, grouped for display, each with its type,
