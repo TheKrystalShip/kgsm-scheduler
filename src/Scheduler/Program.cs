@@ -41,11 +41,11 @@ internal sealed class Program
         builder.Services.AddSingleton<ScheduleRegistry>();
 
         var options = builder.Configuration;
-        // socketPath is required by the extension but unused — the scheduler reads config
-        // from the filesystem (IInstanceService shells out to kgsm), not from kgsm events.
+        // The scheduler consumes no events — it reads config from the filesystem
+        // (IInstanceService shells out to kgsm) and dispatches through the watchdog client.
+        // The registered journal reader is simply never initialized.
         builder.Services.AddKgsmServices(
-            options["KGSM_SCHEDULER_KGSM_PATH"] ?? "/usr/bin/kgsm",
-            "/dev/null");
+            options["KGSM_SCHEDULER_KGSM_PATH"] ?? "/usr/bin/kgsm");
         builder.Services.AddKgsmWatchdogClient(
             options["KGSM_SCHEDULER_WATCHDOG_SOCKET"] ?? "/run/kgsm-watchdog/control.sock");
 

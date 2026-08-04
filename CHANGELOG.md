@@ -4,6 +4,12 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — kgsm-lib 2.0.0 (the socket event transport is gone)
+- **Pinned to `TheKrystalShip.KGSM.Lib` 2.0.0**, which removes `UnixSocketClient`,
+  `KgsmEventTransport` and `KgsmOptions.SocketPath`/`EventTransport`. The scheduler consumes no events, but was
+  still calling the socket overload with `/dev/null` as a path it documented as "required but unused".
+  It now takes the one-argument overload and constructs no event transport at all. No behaviour change.
+
 ### Fixed — scheduled fires actually happen
 - **A schedule now fires.** The engine recomputed "the next fire after now" on every tick and then
   asked whether that was already due. It never was: a next-fire time is by construction after the
