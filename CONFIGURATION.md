@@ -2,41 +2,58 @@
 
 ## Sources
 
-Configuration is loaded from two sources, in order of precedence (last wins):
+Configuration comes from two sources, later wins:
 
-1. **`kgsm-scheduler.settings.json`** — lives next to the binary. Provides documented defaults.
-2. **Environment variables** — same key names as the JSON file. Override the file values.
+1. **`kgsm-scheduler.settings.json`** — installed beside the binary. Declares the daemon's **whole**
+   configurable surface, each key with its default. This is the floor.
+2. **Environment variables** — override one key each. The systemd unit supplies them via
+   `EnvironmentFile=-/etc/kgsm-scheduler/kgsm-scheduler.env`.
 
-The systemd unit sets env vars via `EnvironmentFile=-/etc/kgsm-scheduler/kgsm-scheduler.env`.
-For local development, edit `kgsm-scheduler.settings.json` directly.
+An environment variable names a key by spelling that key's **path** through the file with `__`:
+`Scheduler__PollIntervalSeconds` sets `Scheduler` → `PollIntervalSeconds`. **A variable naming a
+key the file does not declare binds to nothing** — there is no separate list of recognized
+variables to fall out of sync with, so if a name is not in that file it does not exist.
+
+For local development, edit `kgsm-scheduler.settings.json` directly. On a host, prefer the env file:
+a deploy replaces the settings file, so operator config kept there survives.
 
 ## Settings
 
-Every setting has three representations: a JSON key, an env var of the same name, and a
-typed property on `SchedulerOptions`. Defaults are listed under the JSON column.
+Every setting is three things that cannot disagree: a key in `kgsm-scheduler.settings.json`, a
+property on `SchedulerSettings`, and a field in `deploy/kgsm-scheduler.leaf.json` (what the Control
+Panel renders). A test fails the build if any of the three is missing one of the others.
 
-| JSON key / Env var | Default | Description |
-|---|---|---|
-| `KGSM_SCHEDULER_KGSM_PATH` | `/usr/bin/kgsm` | Path to the `kgsm` binary. Validated at startup — the daemon refuses to start if this file does not exist. Set the env var or edit the JSON to point at a non-standard install. |
-| `KGSM_SCHEDULER_WATCHDOG_SOCKET` | `/run/kgsm-watchdog/control.sock` | kgsm-watchdog control unix socket. Scheduler issues atomic restarts through the watchdog — never directly. Must match the watchdog's listen path. |
-| `KGSM_SCHEDULER_STATUS_SOCKET` | `/run/kgsm-scheduler/status.sock` | Status unix socket the scheduler exposes. Serves one NDJSON line per connection with the current schedule snapshot. `kgsm-api` connects here for the `/settings` aggregation. The systemd unit creates the parent directory (`RuntimeDirectory=kgsm-scheduler`). |
-| `KGSM_SCHEDULER_POLL_INTERVAL` | `60` | How often (seconds) to re-scan instance schedule config from kgsm. Lower = more responsive to config changes, higher = less I/O. Anything below 5 is raised to 5. |
-| `KGSM_SCHEDULER_GRACE_WINDOW_MINUTES` | `10` | Grace window in minutes. If a scheduled fire is more than this many minutes late (host was down, daemon was stopped), skip it rather than firing a surprise restart. Prevents catch-up storms on boot. Set to 0 to always fire missed restarts. |
+| Key | Env var | Default | Description |
+|---|---|---|---|
+| `Scheduler:KgsmPath` | `Scheduler__KgsmPath` | `/usr/bin/kgsm` | Path to the KGSM executable, read for each server's schedule. Checked at startup — the daemon refuses to start if nothing is there. |
+| `Scheduler:WatchdogSocketPath` | `Scheduler__WatchdogSocketPath` | `/run/kgsm-watchdog/control.sock` | The watchdog's control socket. Restarts are issued through the watchdog, never directly, so this has to match the path the watchdog listens on. |
+| `Scheduler:StatusSocketPath` | `Scheduler__StatusSocketPath` | `/run/kgsm-scheduler/status.sock` | Unix socket the schedule snapshot is served on, one NDJSON line per connection. `kgsm-api` reads it here for the `/settings` aggregation. The unit creates the parent directory (`RuntimeDirectory=kgsm-scheduler`). |
+| `Scheduler:PollIntervalSeconds` | `Scheduler__PollIntervalSeconds` | `60` | How often each server's schedule is re-read from KGSM. Bounds how quickly a schedule change takes effect; does not affect the accuracy of a fire already scheduled. Anything below 5 is raised to 5. |
+| `Scheduler:GraceWindowMinutes` | `Scheduler__GraceWindowMinutes` | `10` | How late a missed restart may be and still run. Anything later is skipped, so a host that was down does not come back to a burst of catch-up restarts. Zero always runs missed restarts. |
+| `Logging:LogLevel:Default` | `Logging__LogLevel__Default` | `Information` | Minimum severity logged, to the journal. |
+
+Out-of-range numbers are clamped and blank strings fall back to the coded default, so a hand-edited
+value degrades to something workable rather than taking the daemon down at startup.
 
 ## Example: env var override
 
 ```bash
 # /etc/kgsm-scheduler/kgsm-scheduler.env
-KGSM_SCHEDULER_POLL_INTERVAL=30
-KGSM_SCHEDULER_GRACE_WINDOW_MINUTES=5
+Scheduler__PollIntervalSeconds=30
+Scheduler__GraceWindowMinutes=5
 ```
 
-## Example: kgsm-scheduler.settings.json override
+`deploy/kgsm-scheduler.env.example` is the annotated version of the same file, with every knob and
+its default.
+
+## Example: settings file override
 
 ```jsonc
 {
-  // Only override what you need; missing keys use the coded defaults.
-  "KGSM_SCHEDULER_POLL_INTERVAL": "30",
-  "KGSM_SCHEDULER_GRACE_WINDOW_MINUTES": "5"
+  // Only the keys you change; anything omitted keeps its coded default.
+  "Scheduler": {
+    "PollIntervalSeconds": 30,
+    "GraceWindowMinutes": 5
+  }
 }
 ```

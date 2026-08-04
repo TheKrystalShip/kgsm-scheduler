@@ -17,4 +17,25 @@ internal sealed class SchedulerOptions
     /// skip it rather than firing a surprise restart. Prevents catch-up storms.
     /// </summary>
     public int GraceWindowMinutes { get; init; } = 10;
+
+    /// <summary>
+    /// Validates what configuration supplied and produces the form the daemon runs on. Out-of-range
+    /// numbers are clamped and blank strings fall back to the coded default, so a hand-edited value
+    /// degrades to something workable instead of taking the daemon down at startup.
+    /// </summary>
+    public static SchedulerOptions FromSettings(SchedulerSettings s)
+    {
+        var defaults = new SchedulerOptions();
+        return new SchedulerOptions
+        {
+            KgsmPath = Or(s.KgsmPath, defaults.KgsmPath),
+            WatchdogSocketPath = Or(s.WatchdogSocketPath, defaults.WatchdogSocketPath),
+            StatusSocketPath = Or(s.StatusSocketPath, defaults.StatusSocketPath),
+            PollIntervalSeconds = Math.Max(s.PollIntervalSeconds, MinPollIntervalSeconds),
+            GraceWindowMinutes = Math.Max(s.GraceWindowMinutes, 0),
+        };
+    }
+
+    private static string Or(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 }

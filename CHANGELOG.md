@@ -4,6 +4,50 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — configuration is typed, and the settings file declares all of it
+
+**This deploy renames every environment variable the scheduler reads.** A host carrying the old
+names loses those overrides silently and falls back to the settings file, so update
+`/etc/kgsm-scheduler/kgsm-scheduler.env` in the same step. The Control Panel needs no change: the
+descriptor's `key` values are untouched, so a stored override keeps working.
+
+| Was | Now |
+|---|---|
+| `KGSM_SCHEDULER_KGSM_PATH` | `Scheduler__KgsmPath` |
+| `KGSM_SCHEDULER_WATCHDOG_SOCKET` | `Scheduler__WatchdogSocketPath` |
+| `KGSM_SCHEDULER_STATUS_SOCKET` | `Scheduler__StatusSocketPath` |
+| `KGSM_SCHEDULER_POLL_INTERVAL` | `Scheduler__PollIntervalSeconds` |
+| `KGSM_SCHEDULER_GRACE_WINDOW_MINUTES` | `Scheduler__GraceWindowMinutes` |
+
+- **`kgsm-scheduler.settings.json` declares the whole configurable surface**, hierarchically, each
+  key with its default. An environment variable overrides one key of it by spelling that key's path
+  with `__`. There is no longer a separate set of variable names that only the code knows: a name
+  not in that file binds to nothing, which is what makes the descriptor checkable against something
+  real rather than against a regex over the source.
+- **`SchedulerSettings` binds the file in one step**, and nothing reads configuration by string
+  lookup. `SchedulerOptions.FromSettings` is the validating step between what was written and what
+  the daemon runs on — it clamps and falls back, so a hand-edited value degrades rather than taking
+  the daemon down.
+- **The startup `kgsm` check reads the same bound options the daemon runs on**, instead of
+  re-reading configuration by a second path that could disagree with the first.
+- **The settings file is read from beside the binary**, by absolute path, so the working directory
+  the unit happens to start in cannot decide whether the daemon is configured.
+- **`KGSM_SCHEDULER_KGSM_SOCKET` is gone from the host env file.** Nothing has read it since the
+  socket event transport was removed; it sat there looking like configuration.
+
+### Fixed — the Control Panel can attribute a value again
+- **`floorSources` lists the settings file first.** The list is lowest-precedence-first, and the
+  settings file is the base the environment overrides. Listed last, the Control Panel resolves a
+  knob to the file's default and reports it as the deployed value — showing a blank where the unit
+  sets a real path. A test now pins the ordering.
+
+### Added
+- **`deploy/kgsm-scheduler.env.example`** — the annotated operator env file, every knob with its
+  default. `setup.sh` seeds `/etc/kgsm-scheduler/kgsm-scheduler.env` from it on a fresh host.
+- **The descriptor coverage test pins a chain of three**, in both directions at every link: a
+  property on `SchedulerSettings`, a key in the settings file, a field in the descriptor. Adding a
+  knob to one and forgetting the others fails the build.
+
 ### Changed — kgsm-lib 2.0.0 (the socket event transport is gone)
 - **Pinned to `TheKrystalShip.KGSM.Lib` 2.0.0**, which removes `UnixSocketClient`,
   `KgsmEventTransport` and `KgsmOptions.SocketPath`/`EventTransport`. The scheduler consumes no events, but was

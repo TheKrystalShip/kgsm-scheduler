@@ -1,19 +1,41 @@
 {
   // === KGSM Scheduler — configuration ===
-  // Every key below is also overridable by an environment variable of the SAME name
-  // (env wins over this file). Edit values here for local defaults, or set the matching
-  // KGSM_SCHEDULER_* env var on the deployed host.
+  //
+  // This file declares the daemon's WHOLE configurable surface, each key with its default. It is
+  // the floor; an environment variable overrides one key of it by spelling that key's path with
+  // "__" — Scheduler__PollIntervalSeconds, Logging__LogLevel__Default. A variable naming a key
+  // that is not declared here binds to nothing.
+  //
+  // Every key below maps 1:1 onto a property of SchedulerSettings, which the daemon binds in one
+  // step. A test fails the build if the two ever disagree, in either direction.
 
-  // Path to the kgsm binary. The scheduler validates this exists at startup.
-  "KGSM_SCHEDULER_KGSM_PATH": "/usr/bin/kgsm",
-  // kgsm-watchdog control socket — scheduler issues restarts through the watchdog.
-  "KGSM_SCHEDULER_WATCHDOG_SOCKET": "/run/kgsm-watchdog/control.sock",
-  // Status unix socket — serves the NDJSON status snapshot (one line per connect).
-  // kgsm-api connects here for the /settings aggregation.
-  "KGSM_SCHEDULER_STATUS_SOCKET": "/run/kgsm-scheduler/status.sock",
-  // How often to re-scan instance schedule config (seconds). Floor ~5.
-  "KGSM_SCHEDULER_POLL_INTERVAL": "60",
-  // If a scheduled fire is more than this many minutes late (host was down, daemon
-  // was stopped), skip it rather than firing a surprise restart. Prevents catch-up storms.
-  "KGSM_SCHEDULER_GRACE_WINDOW_MINUTES": "10"
+  "Scheduler": {
+    // Path to the KGSM executable, read for each server's schedule. Checked at startup — the
+    // daemon refuses to run if nothing is there.
+    "KgsmPath": "/usr/bin/kgsm",
+
+    // The watchdog's control socket. Every scheduled restart is issued through the watchdog,
+    // never directly, so this has to match the path the watchdog listens on.
+    "WatchdogSocketPath": "/run/kgsm-watchdog/control.sock",
+
+    // Unix socket the schedule snapshot is served on, one NDJSON line per connection. The
+    // Control Panel reads it here to show what is scheduled and when it last ran. The unit
+    // creates the parent directory (RuntimeDirectory=kgsm-scheduler).
+    "StatusSocketPath": "/run/kgsm-scheduler/status.sock",
+
+    // How often each server's schedule is re-read from KGSM (seconds). This bounds how quickly a
+    // schedule change takes effect; it does not affect the accuracy of a fire already scheduled.
+    // Anything below 5 is raised to 5.
+    "PollIntervalSeconds": 60,
+
+    // How late a missed restart may be and still run (minutes). Anything later is skipped, so a
+    // host that was down does not come back to a burst of catch-up restarts. Zero always runs them.
+    "GraceWindowMinutes": 10
+  },
+
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information"
+    }
+  }
 }

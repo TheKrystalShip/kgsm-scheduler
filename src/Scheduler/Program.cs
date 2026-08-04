@@ -14,50 +14,42 @@ internal sealed class Program
     {
         var builder = Host.CreateApplicationBuilder(args);
 
+        // The settings file lives beside the binary, which is not necessarily the working directory
+        // the unit starts us in, so it is named absolutely. Environment variables are registered
+        // after it and therefore win: configuration resolves by source order, and appending the file
+        // to the sources the builder already installed puts it ahead of the builder's own
+        // environment provider. Without re-registering, the file would outrank every Scheduler__*
+        // and Logging__* variable and an override would read as applied while changing nothing.
         builder.Configuration
-            .AddJsonFile("kgsm-scheduler.settings.json", optional: true, reloadOnChange: false)
+            .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "kgsm-scheduler.settings.json"),
+                optional: true, reloadOnChange: false)
             .AddEnvironmentVariables();
 
-        builder.Services.AddSingleton<IOptions<SchedulerOptions>>(sp =>
-        {
-            var cfg = sp.GetRequiredService<IConfiguration>();
-            return Options.Create(new SchedulerOptions
-            {
-                KgsmPath = cfg["KGSM_SCHEDULER_KGSM_PATH"] ?? "/usr/bin/kgsm",
-                WatchdogSocketPath = cfg["KGSM_SCHEDULER_WATCHDOG_SOCKET"] ?? "/run/kgsm-watchdog/control.sock",
-                StatusSocketPath = cfg["KGSM_SCHEDULER_STATUS_SOCKET"] ?? "/run/kgsm-scheduler/status.sock",
-                PollIntervalSeconds = int.TryParse(cfg["KGSM_SCHEDULER_POLL_INTERVAL"], out var p)
-                    ? Math.Max(p, SchedulerOptions.MinPollIntervalSeconds)
-                    : 60,
-                GraceWindowMinutes = int.TryParse(cfg["KGSM_SCHEDULER_GRACE_WINDOW_MINUTES"], out var g)
-                    ? Math.Max(g, 0)
-                    : 10,
-            });
-        });
+        var settings = builder.Configuration.GetSection(SchedulerSettings.Section).Get<SchedulerSettings>()
+            ?? new SchedulerSettings();
+        var options = SchedulerOptions.FromSettings(settings);
+
+        builder.Services.AddSingleton<IOptions<SchedulerOptions>>(Options.Create(options));
 
         builder.Logging.ClearProviders();
         builder.Logging.AddSystemdConsole();
 
         builder.Services.AddSingleton<ScheduleRegistry>();
 
-        var options = builder.Configuration;
         // The scheduler consumes no events — it reads config from the filesystem
         // (IInstanceService shells out to kgsm) and dispatches through the watchdog client.
         // The registered journal reader is simply never initialized.
-        builder.Services.AddKgsmServices(
-            options["KGSM_SCHEDULER_KGSM_PATH"] ?? "/usr/bin/kgsm");
-        builder.Services.AddKgsmWatchdogClient(
-            options["KGSM_SCHEDULER_WATCHDOG_SOCKET"] ?? "/run/kgsm-watchdog/control.sock");
+        builder.Services.AddKgsmServices(options.KgsmPath);
+        builder.Services.AddKgsmWatchdogClient(options.WatchdogSocketPath);
 
         builder.Services.AddHostedService<SchedulerEngine>();
         builder.Services.AddHostedService<StatusSocketServer>();
 
         var host = builder.Build();
 
-        var schedulerOptions = host.Services.GetRequiredService<IOptions<SchedulerOptions>>().Value;
-        if (string.IsNullOrEmpty(schedulerOptions.KgsmPath) || !File.Exists(schedulerOptions.KgsmPath))
+        if (!File.Exists(options.KgsmPath))
         {
-            Console.Error.WriteLine($"[FATAL] kgsm not found at '{schedulerOptions.KgsmPath}'. Set KGSM_SCHEDULER_KGSM_PATH.");
+            Console.Error.WriteLine($"[FATAL] kgsm not found at '{options.KgsmPath}'. Set Scheduler__KgsmPath.");
             return 1;
         }
 

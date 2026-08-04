@@ -4,27 +4,23 @@ namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 
 /// <summary>
 /// The leaf config descriptor (<c>deploy/kgsm-scheduler.leaf.json</c>) is what the Control Panel
-/// renders this daemon's configuration page from. These tests are the anti-drift guard: a knob
-/// added to the scheduler without a descriptor entry fails the build here, and a descriptor entry
-/// naming a variable the scheduler does not read fails here too.
+/// renders this daemon's configuration page from. These tests are the anti-drift guard, pinning a
+/// chain of three: a property on <see cref="SchedulerSettings"/>, a key in
+/// <c>kgsm-scheduler.settings.json</c>, and a field in the descriptor. Every link is checked in
+/// both directions, so a knob cannot be added to one and forgotten in the others.
 ///
-/// The coverage check scans the <em>source</em> rather than a table of constants. A table only
-/// proves the table and the descriptor agree; a knob read through a raw string literal would
-/// bypass both. The contract is documented in tks/leaf-config-descriptor.md.
+/// The settings file is the pivot rather than a table of constants, because it is what the daemon
+/// actually binds — nothing is read by string lookup, so a key that is not declared there is a key
+/// that cannot be set. The contract is documented in tks/leaf-config-descriptor.md.
 /// </summary>
 public class LeafDescriptorTests
 {
-    private const string EnvPrefix = "KGSM_SCHEDULER_";
-
     /// <summary>
-    /// Variables the scheduler genuinely reads that do NOT appear as literals in its source: the
-    /// ecosystem logging convention resolves these through Microsoft.Extensions.Logging. Named
-    /// explicitly rather than allowed by a pattern, so the exception cannot quietly widen.
+    /// Keys the logging framework resolves for us. They are settable and described, but they are not
+    /// scheduler properties, so the property-level checks skip them. Named explicitly rather than
+    /// allowed by a pattern, so the exception cannot quietly widen.
     /// </summary>
-    private static readonly HashSet<string> FrameworkKeys = new(StringComparer.Ordinal)
-    {
-        "Logging__LogLevel__Default",
-    };
+    private static bool IsFrameworkKey(string key) => key.StartsWith("Logging__", StringComparison.Ordinal);
 
     private static readonly string[] FieldTypes =
         ["string", "int", "bool", "enum", "secret", "path", "csv", "duration", "float"];
@@ -58,54 +54,97 @@ public class LeafDescriptorTests
     private static string? OptionalStr(JsonElement field, string name) =>
         field.TryGetProperty(name, out JsonElement v) ? v.GetString() : null;
 
-    /// <summary>Every KGSM_SCHEDULER_* variable named anywhere in the daemon's own source.</summary>
-    private static HashSet<string> EnvKeysInSource()
+    /// <summary>
+    /// Every environment variable that can set something, derived from the settings file itself by
+    /// walking it to its leaves and joining each path with <c>__</c> — exactly the spelling
+    /// configuration binds. A key absent here binds to nothing, whatever names it.
+    /// </summary>
+    private static HashSet<string> SettableEnvKeys()
     {
-        string src = Path.Combine(RepoRoot(), "src", "Scheduler");
+        string path = Path.Combine(RepoRoot(), "src", "Scheduler", "kgsm-scheduler.settings.json");
+        Assert.True(File.Exists(path), $"the settings file is missing: {path}");
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(path),
+            new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+
         var found = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (string file in Directory.EnumerateFiles(src, "*.cs", SearchOption.AllDirectories))
+        static void Walk(JsonElement node, string prefix, HashSet<string> into)
         {
-            // The build's own generated sources are not configuration reads.
-            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
-                file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-                continue;
-
-            foreach (System.Text.RegularExpressions.Match m in
-                     System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(file), @"KGSM_SCHEDULER_[A-Z0-9_]+"))
-                found.Add(m.Value);
+            foreach (JsonProperty prop in node.EnumerateObject())
+            {
+                string key = prefix.Length == 0 ? prop.Name : $"{prefix}__{prop.Name}";
+                if (prop.Value.ValueKind == JsonValueKind.Object)
+                    Walk(prop.Value, key, into);
+                else
+                    into.Add(key);
+            }
         }
+        Walk(doc.RootElement, string.Empty, found);
 
         Assert.NotEmpty(found);   // a scan that finds nothing would pass every check below vacuously
         return found;
     }
 
-    // ── Coverage: the descriptor and the code agree, both ways ───────────────
+    /// <summary>The env-var spelling of every property the daemon binds.</summary>
+    private static HashSet<string> SettingsPropertyKeys() =>
+        typeof(SchedulerSettings)
+            .GetProperties()
+            .Select(p => $"{SchedulerSettings.Section}__{p.Name}")
+            .ToHashSet(StringComparer.Ordinal);
+
+    // ── Coverage: settings file ↔ bound type ↔ descriptor, all four directions ──
 
     [Fact]
-    public void Every_env_var_the_scheduler_reads_is_described()
+    public void Every_configurable_key_is_described()
     {
         var described = Fields().Select(f => Str(f, "env")).ToHashSet(StringComparer.Ordinal);
-        var missing = EnvKeysInSource().Where(k => !described.Contains(k)).OrderBy(k => k, StringComparer.Ordinal).ToList();
+        var missing = SettableEnvKeys().Where(k => !described.Contains(k))
+            .OrderBy(k => k, StringComparer.Ordinal).ToList();
 
         Assert.True(missing.Count == 0,
-            "these variables are read by the scheduler but not described in deploy/kgsm-scheduler.leaf.json, so " +
-            "the Control Panel cannot show or set them:\n  " + string.Join("\n  ", missing));
+            "these keys are settable but not described in deploy/kgsm-scheduler.leaf.json, so the Control Panel " +
+            "cannot show or set them:\n  " + string.Join("\n  ", missing));
     }
 
     [Fact]
-    public void Every_described_env_var_is_real()
+    public void Every_described_key_is_really_settable()
     {
-        var inSource = EnvKeysInSource();
+        var settable = SettableEnvKeys();
         var fabricated = Fields()
             .Select(f => Str(f, "env"))
-            .Where(e => !inSource.Contains(e) && !FrameworkKeys.Contains(e))
+            .Where(e => !settable.Contains(e))
             .OrderBy(e => e, StringComparer.Ordinal)
             .ToList();
 
         Assert.True(fabricated.Count == 0,
-            "these descriptor fields name variables the scheduler does not read — an override written for one " +
-            "would be reported as applied while changing nothing:\n  " + string.Join("\n  ", fabricated));
+            "these descriptor fields name keys the settings file does not declare, so they bind to nothing — an " +
+            "override written for one would be reported as applied while changing nothing:\n  " +
+            string.Join("\n  ", fabricated));
+    }
+
+    [Fact]
+    public void Every_settings_key_binds_to_a_property()
+    {
+        var properties = SettingsPropertyKeys();
+        var unbound = SettableEnvKeys()
+            .Where(k => !IsFrameworkKey(k) && !properties.Contains(k))
+            .OrderBy(k => k, StringComparer.Ordinal).ToList();
+
+        Assert.True(unbound.Count == 0,
+            "these keys are declared in kgsm-scheduler.settings.json but have no matching property on " +
+            "SchedulerSettings, so binding silently drops them:\n  " + string.Join("\n  ", unbound));
+    }
+
+    [Fact]
+    public void Every_settings_property_is_declared_in_the_file()
+    {
+        var settable = SettableEnvKeys();
+        var undeclared = SettingsPropertyKeys().Where(k => !settable.Contains(k))
+            .OrderBy(k => k, StringComparer.Ordinal).ToList();
+
+        Assert.True(undeclared.Count == 0,
+            "these SchedulerSettings properties are missing from kgsm-scheduler.settings.json, which is supposed to " +
+            "declare the whole configurable surface with its defaults:\n  " + string.Join("\n  ", undeclared));
     }
 
     // ── Structure ────────────────────────────────────────────────────────────
@@ -137,6 +176,12 @@ public class LeafDescriptorTests
             Assert.Contains(Str(s, "kind"), kinds);
             Assert.StartsWith("/", Str(s, "path"));
         }
+
+        // floorSources is lowest-precedence-first, and the settings file is the base every other
+        // source overrides. Listed anywhere else, the Control Panel resolves a knob to the file's
+        // default and reports it as the deployed value — showing a blank where the unit sets a real
+        // path. That is wrong on a screen whose whole job is saying where a value came from.
+        Assert.Equal("appsettings", Str(sources[0], "kind"));
     }
 
     [Fact]

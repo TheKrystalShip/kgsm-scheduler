@@ -31,10 +31,18 @@ owns autostart + crash-restart + CPU/mem caps. See `tks/server-settings-plan.md`
 - `src/Scheduler/StatusSocketServer.cs` — `BackgroundService` that serves the current
   status snapshot as one NDJSON line per connection over a unix socket. Health =
   connect + parse.
-- `src/Scheduler/SchedulerOptions.cs` — pure POCO with defaults; bound from
-  `IConfiguration` (`KGSM_SCHEDULER_*` keys) via `IOptions<SchedulerOptions>`.
-- `kgsm-scheduler.settings.json` — default config values (same keys as env vars). Copied to
-  publish output. Env vars win over file values.
+- `src/Scheduler/SchedulerSettings.cs` — the configuration surface, shaped 1:1 to the
+  `Scheduler` section of `kgsm-scheduler.settings.json` and bound in one step. Holds
+  what was *written*, unvalidated.
+- `src/Scheduler/SchedulerOptions.cs` — the validated form the daemon runs on.
+  `FromSettings` clamps out-of-range numbers and falls back on blanks, so a hand-edited
+  value degrades instead of taking the daemon down. Injected as `IOptions<SchedulerOptions>`.
+- `kgsm-scheduler.settings.json` — declares the whole configurable surface with defaults.
+  Copied to publish output, installed beside the binary. An environment variable overrides
+  one key by spelling its path with `__` (`Scheduler__PollIntervalSeconds`); a variable
+  naming a key this file does not declare binds to nothing.
+- `deploy/kgsm-scheduler.env.example` — the annotated operator env file; `setup.sh` seeds
+  `/etc/kgsm-scheduler/kgsm-scheduler.env` from it.
 - `CONFIGURATION.md` — full reference for all settings, env vars, and defaults.
 - `src/Scheduler/Json/SchedulerJsonContext.cs` — source-generated JSON context
   (AOT: all serialization goes through this).
@@ -92,7 +100,7 @@ This is a **Native AOT** project (`PublishAot=true`). Constraints: no reflection
 
 ## Status socket
 
-Default `/run/kgsm-scheduler/status.sock` (`KGSM_SCHEDULER_STATUS_SOCKET`). One NDJSON
+Default `/run/kgsm-scheduler/status.sock` (`Scheduler__StatusSocketPath`). One NDJSON
 line per connect: `{ "instances": [ { name, scheduledRestart, restartTime, restartDay,
 timezone, nextFireUtc, lastRunUtc, lastRunOk, lastRunMessage } ] }`. This is what
 `kgsm-api` connects to for the `/settings` aggregation.

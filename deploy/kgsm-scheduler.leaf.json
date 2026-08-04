@@ -7,9 +7,9 @@
   "onDemand": false,
   "applyMode": "restart",
   "floorSources": [
+    { "kind": "appsettings", "path": "/opt/kgsm-scheduler/kgsm-scheduler.settings.json" },
     { "kind": "systemd-unit", "path": "/etc/kgsm-scheduler/systemd/kgsm-scheduler.service" },
-    { "kind": "env-file", "path": "/etc/kgsm-scheduler/kgsm-scheduler.env" },
-    { "kind": "appsettings", "path": "/opt/kgsm-scheduler/kgsm-scheduler.settings.json" }
+    { "kind": "env-file", "path": "/etc/kgsm-scheduler/kgsm-scheduler.env" }
   ],
   "groups": [
     { "id": "general", "label": "General", "order": 1 },
@@ -30,7 +30,7 @@
     },
     {
       "key": "kgsmPath",
-      "env": "KGSM_SCHEDULER_KGSM_PATH",
+      "env": "Scheduler__KgsmPath",
       "label": "KGSM executable",
       "description": "Path to the KGSM executable, which the scheduler reads each server's schedule from. It is checked at startup, and the daemon refuses to run if nothing is there.",
       "group": "wiring",
@@ -40,7 +40,7 @@
     },
     {
       "key": "watchdogSocket",
-      "env": "KGSM_SCHEDULER_WATCHDOG_SOCKET",
+      "env": "Scheduler__WatchdogSocketPath",
       "label": "Watchdog control socket",
       "description": "The watchdog's control socket, which every scheduled restart is issued through. It has to match the path the watchdog listens on, or nothing scheduled ever fires.",
       "group": "wiring",
@@ -50,7 +50,7 @@
     },
     {
       "key": "statusSocket",
-      "env": "KGSM_SCHEDULER_STATUS_SOCKET",
+      "env": "Scheduler__StatusSocketPath",
       "label": "Status socket",
       "description": "Unix socket the scheduler serves its schedule snapshot on. The Control Panel reads it here to show what is scheduled and when it last ran.",
       "group": "wiring",
@@ -61,7 +61,7 @@
     },
     {
       "key": "pollIntervalSec",
-      "env": "KGSM_SCHEDULER_POLL_INTERVAL",
+      "env": "Scheduler__PollIntervalSeconds",
       "label": "Schedule re-scan interval",
       "description": "How often each server's schedule is re-read from KGSM. This bounds how quickly a schedule change takes effect; it does not affect the accuracy of a fire that is already scheduled.",
       "group": "timing",
@@ -73,7 +73,7 @@
     },
     {
       "key": "graceWindowMin",
-      "env": "KGSM_SCHEDULER_GRACE_WINDOW_MINUTES",
+      "env": "Scheduler__GraceWindowMinutes",
       "label": "Missed-fire grace window",
       "description": "How late a missed restart may be and still run. Anything later is skipped, so a host that was down does not come back to a burst of catch-up restarts. Zero always runs missed restarts.",
       "group": "timing",

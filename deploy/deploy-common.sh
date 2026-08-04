@@ -36,7 +36,7 @@ PREFIX="/opt/${PROJECT}"
 
 ENV_DIR="/etc/${PROJECT}"
 ENV_FILE="${ENV_DIR}/${PROJECT}.env"
-ENV_EXAMPLE=""
+ENV_EXAMPLE="${REPO_DIR}/deploy/${PROJECT}.env.example"
 
 HEALTH_TRIES="${HEALTH_TRIES:-30}"
 
@@ -62,7 +62,7 @@ render_unit() {   # $1 = unit filename
 # That proves the engine is actually serving, which "systemd launched it" does not. A raw unix
 # socket is not something bash can open, so the probe goes through python3; if python3 is absent
 # the probe degrades to liveness and says so rather than silently claiming a stronger check.
-SCHED_SOCK="${KGSM_SCHEDULER_STATUS_SOCKET:-/run/kgsm-scheduler/status.sock}"
+SCHED_SOCK="${Scheduler__StatusSocketPath:-/run/kgsm-scheduler/status.sock}"
 health_probe() {
     systemctl is-active --quiet "$SERVICE" || return 1
     command -v python3 >/dev/null 2>&1 || return 0

@@ -12,7 +12,7 @@
 # Deploy is verified against the status socket (connect + read a status line), which is the
 # daemon's documented health signal — not merely "systemd launched it".
 #
-# Knobs: RID, KGSM_SCHEDULER_STATUS_SOCKET, HEALTH_TRIES.
+# Knobs: RID, Scheduler__StatusSocketPath, HEALTH_TRIES.
 #
 set -euo pipefail
 
