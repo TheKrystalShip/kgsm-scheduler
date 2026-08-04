@@ -9,8 +9,20 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
-    <Version>2.1.2</Version>
+    <Version>2.2.0</Version>
+
+    <!-- The leaf config descriptor is generated from SchedulerSettings. These name the two files the
+         generator works between; the attribute source, the documentation file the <panel> tags travel
+         in, and the build step all come with the package below. -->
+    <LeafSettingsFile>kgsm-scheduler.settings.json</LeafSettingsFile>
+    <LeafDescriptorFile>$(MSBuildProjectDirectory)/../../deploy/kgsm-scheduler.leaf.json</LeafDescriptorFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Build-only: the descriptor attributes arrive as source and the generator as a tool, and the
+         package declares no dependencies, so nothing here reaches the AOT publish. -->
+    <PackageReference Include="TheKrystalShip.KGSM.LeafConfig" Version="1.0.0" PrivateAssets="all" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />

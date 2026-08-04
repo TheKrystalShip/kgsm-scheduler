@@ -7,14 +7,35 @@
   "onDemand": false,
   "applyMode": "restart",
   "floorSources": [
-    { "kind": "appsettings", "path": "/opt/kgsm-scheduler/kgsm-scheduler.settings.json" },
-    { "kind": "systemd-unit", "path": "/etc/kgsm-scheduler/systemd/kgsm-scheduler.service" },
-    { "kind": "env-file", "path": "/etc/kgsm-scheduler/kgsm-scheduler.env" }
+    {
+      "kind": "appsettings",
+      "path": "/opt/kgsm-scheduler/kgsm-scheduler.settings.json"
+    },
+    {
+      "kind": "systemd-unit",
+      "path": "/etc/kgsm-scheduler/systemd/kgsm-scheduler.service"
+    },
+    {
+      "kind": "env-file",
+      "path": "/etc/kgsm-scheduler/kgsm-scheduler.env"
+    }
   ],
   "groups": [
-    { "id": "general", "label": "General", "order": 1 },
-    { "id": "wiring", "label": "Connections", "order": 2 },
-    { "id": "timing", "label": "Timing", "order": 3 }
+    {
+      "id": "general",
+      "label": "General",
+      "order": 1
+    },
+    {
+      "id": "wiring",
+      "label": "Connections",
+      "order": 2
+    },
+    {
+      "id": "timing",
+      "label": "Timing",
+      "order": 3
+    }
   ],
   "fields": [
     {
@@ -24,7 +45,14 @@
       "description": "Minimum severity this leaf logs.",
       "group": "general",
       "type": "enum",
-      "values": ["Trace", "Debug", "Information", "Warning", "Error", "Critical"],
+      "values": [
+        "Trace",
+        "Debug",
+        "Information",
+        "Warning",
+        "Error",
+        "Critical"
+      ],
       "default": "Information",
       "risk": "safe"
     },
