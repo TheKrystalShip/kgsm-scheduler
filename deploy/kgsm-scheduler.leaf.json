@@ -57,7 +57,7 @@
       "type": "path",
       "default": "/run/kgsm-scheduler/status.sock",
       "risk": "wiring",
-      "pairedApiKey": "KGSM_API_SCHEDULER_SOCKET"
+      "pairedApiKey": "Api__SchedulerSocketPath"
     },
     {
       "key": "pollIntervalSec",

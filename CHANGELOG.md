@@ -4,6 +4,12 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed
+- **`pairedApiKey` names the Control Panel API's renamed setting.** kgsm-api's environment
+  variables are now spelled `Api__<Property>`, and this value is what the API resolves to warn that
+  a change here has moved this leaf out of its reach. Naming the old key would have made that check
+  silently find nothing and report the change as clean.
+
 ### Fixed — a knob written blank no longer takes the daemon down
 - **Both numbers in the settings type are nullable, so "written blank" means unset.** Binding a blank
   value to a non-nullable `int` throws, which made a single stray `Scheduler__PollIntervalSeconds=`
