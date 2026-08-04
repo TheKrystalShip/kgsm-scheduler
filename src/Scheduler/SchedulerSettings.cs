@@ -11,8 +11,17 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 /// This type holds what was <em>written</em>, not what the daemon runs on: values arrive
 /// unvalidated, exactly as the file or the environment spelled them. <see cref="SchedulerOptions"/>
 /// is the validated form — clamping and fallbacks live in
-/// <see cref="SchedulerOptions.FromSettings"/>, so binding never fails on a hand-edited value and
-/// the daemon starts with something sane instead of not at all.
+/// <see cref="SchedulerOptions.FromSettings"/>, so the daemon starts with something sane rather
+/// than not at all.
+/// <para>
+/// Both numbers are <b>nullable</b>, and null means "not written" — the coded default in
+/// <see cref="SchedulerOptions"/> applies. Two binder behaviours make this load-bearing rather than
+/// stylistic: a blank value (<c>Scheduler__PollIntervalSeconds=</c>, a single stray line in an env
+/// file) binds to a non-nullable <see cref="int"/> by throwing, taking the daemon down at startup;
+/// and a JSON null binds to <c>0</c>, silently discarding the default a property initializer here
+/// would have carried. Nullable turns both into "unset". A value that is present but is not a
+/// number still fails loudly, which is the point of typing it at all.
+/// </para>
 /// </remarks>
 internal sealed class SchedulerSettings
 {
@@ -32,8 +41,8 @@ internal sealed class SchedulerSettings
 
     /// <summary>How often each server's schedule is re-read from KGSM (seconds). Raised to
     /// <see cref="SchedulerOptions.MinPollIntervalSeconds"/> if lower.</summary>
-    public int PollIntervalSeconds { get; set; } = 60;
+    public int? PollIntervalSeconds { get; set; }
 
     /// <summary>How late a missed restart may be and still run (minutes). Anything later is skipped.</summary>
-    public int GraceWindowMinutes { get; set; } = 10;
+    public int? GraceWindowMinutes { get; set; }
 }

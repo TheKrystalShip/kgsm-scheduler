@@ -31,8 +31,8 @@ internal sealed class SchedulerOptions
             KgsmPath = Or(s.KgsmPath, defaults.KgsmPath),
             WatchdogSocketPath = Or(s.WatchdogSocketPath, defaults.WatchdogSocketPath),
             StatusSocketPath = Or(s.StatusSocketPath, defaults.StatusSocketPath),
-            PollIntervalSeconds = Math.Max(s.PollIntervalSeconds, MinPollIntervalSeconds),
-            GraceWindowMinutes = Math.Max(s.GraceWindowMinutes, 0),
+            PollIntervalSeconds = Math.Max(s.PollIntervalSeconds ?? defaults.PollIntervalSeconds, MinPollIntervalSeconds),
+            GraceWindowMinutes = Math.Max(s.GraceWindowMinutes ?? defaults.GraceWindowMinutes, 0),
         };
     }
 

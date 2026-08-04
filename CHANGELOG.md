@@ -4,6 +4,13 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Fixed — a knob written blank no longer takes the daemon down
+- **Both numbers in the settings type are nullable, so "written blank" means unset.** Binding a blank
+  value to a non-nullable `int` throws, which made a single stray `Scheduler__PollIntervalSeconds=`
+  line in an env file a startup crash; a null one binds to `0`, silently discarding the coded default.
+  Null now means unset and the coded default applies. A value that is present but is not a number
+  still fails loudly, which is the point of typing it.
+
 ### Changed — configuration is typed, and the settings file declares all of it
 
 **This deploy renames every environment variable the scheduler reads.** A host carrying the old
