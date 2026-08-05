@@ -6,6 +6,12 @@ After=network.target
 Type=exec
 User=heisen
 ExecStart=/opt/kgsm-scheduler/kgsm-scheduler
+# Start the daemon in its own install prefix so the process working directory is never "/". The
+# daemon pins its content root in code and does not depend on this, but a service left at "/" makes
+# any future default-rooted file provider walk the whole filesystem — which, for a provider that
+# watches (reloadOnChange), silently consumes one inotify watch per directory out of the same
+# per-user budget the game servers on this host draw from.
+WorkingDirectory=/opt/kgsm-scheduler
 Restart=always
 RestartSec=5s
 EnvironmentFile=-/etc/kgsm-scheduler/kgsm-scheduler.env

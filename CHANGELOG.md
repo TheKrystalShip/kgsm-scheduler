@@ -4,6 +4,15 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **The daemon no longer watches the entire filesystem.** The host builder's content root defaulted to
+  the process working directory, which under this unit is `/`, and the builder's own `appsettings.json`
+  providers watch that root *recursively* for reload — one inotify watch per directory, ~190k of the
+  524k per-user budget, held for the daemon's lifetime. That budget is shared with every game server on
+  the host, and a game that cannot register a watch fails to boot. The content root is now pinned to
+  `AppContext.BaseDirectory`, and the unit sets `WorkingDirectory=` so the working directory is the
+  install prefix rather than `/`.
+
 ### Changed — the leaf config descriptor is generated, not written
 - **`deploy/kgsm-scheduler.leaf.json` is now written by `TheKrystalShip.KGSM.LeafConfig` on every build**, from
   `[LeafField]` attributes and `<panel>` doc tags on `SchedulerSettings`. A knob lives in two places —

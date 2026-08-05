@@ -12,7 +12,20 @@ internal sealed class Program
 {
     static async Task<int> Main(string[] args)
     {
-        var builder = Host.CreateApplicationBuilder(args);
+        // ContentRootPath is pinned to the binary's own directory rather than left to default to the
+        // process working directory. The unit starts the daemon with no WorkingDirectory, so that
+        // default is "/", and the builder installs its own appsettings.json providers with
+        // reloadOnChange:true — which hangs a RECURSIVE FileSystemWatcher off the content root.
+        // Rooted at "/", that watch walks the entire filesystem and takes an inotify watch per
+        // directory (~190k here), exhausting the per-user fs.inotify.max_user_watches budget that
+        // the game servers on this host draw from; a game that cannot get a watch fails to boot.
+        // AppContext.BaseDirectory is the one directory that is correct no matter where the process
+        // was started from — the same reason the settings file below is named absolutely.
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            Args = args,
+            ContentRootPath = AppContext.BaseDirectory
+        });
 
         // The settings file lives beside the binary, which is not necessarily the working directory
         // the unit starts us in, so it is named absolutely. Environment variables are registered
