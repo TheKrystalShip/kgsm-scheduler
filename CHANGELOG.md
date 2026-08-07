@@ -4,6 +4,19 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — kgsm-lib 3.1.0
+
+Up from 2.0.0. The engine event journal is now queried directly through the library
+(`IEventJournalHistory`), which retires kgsm-monitor's event index — nothing here read that index, so
+this repo only follows the pin.
+
+Two breaking changes in the library reach this code. `IEventService.RegisterRawHandler` and
+`IEventSource.EventReceived` carry an `EventPosition` alongside the envelope, because an event's
+journal position is now its identity: it is unique by construction, so two identical events emitted
+within one second are no longer collapsed the way a content hash collapsed them.
+`IInstanceService` gained the player-moderation verbs (`Kick`/`Ban`/`Unban`) back in 2.1.0, which
+this repo skipped over. Nothing here implements the interface, so the bump is the whole change.
+
 ### Fixed
 - **The daemon no longer watches the entire filesystem.** The host builder's content root defaulted to
   the process working directory, which under this unit is `/`, and the builder's own `appsettings.json`
