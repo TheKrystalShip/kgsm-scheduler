@@ -248,7 +248,7 @@ internal sealed class SchedulerEngine(
         logger.LogInformation("{Instance}: creating scheduled backup", name);
 
         var result = await Task
-            .Run(() => instances.CreateBackup(name, actor: "scheduler", origin: "scheduler"), ct)
+            .Run(() => instances.CreateBackup(name, actor: "system:scheduler", origin: "system"), ct)
             .ConfigureAwait(false);
 
         bool ok = result.ExitCode == 0;
@@ -261,7 +261,7 @@ internal sealed class SchedulerEngine(
             // Only after a backup that actually landed: pruning around a failed one would drop a
             // good archive to make room for something that was never written.
             var prune = await Task
-                .Run(() => instances.PruneBackups(name, retention, actor: "scheduler", origin: "scheduler"), ct)
+                .Run(() => instances.PruneBackups(name, retention, actor: "system:scheduler", origin: "system"), ct)
                 .ConfigureAwait(false);
 
             if (prune.ExitCode != 0)

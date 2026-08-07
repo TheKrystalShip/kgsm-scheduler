@@ -4,6 +4,18 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Fixed — a scheduled backup is attributed to the leaf, not to a person
+
+The backup and prune calls stamped `actor: "scheduler"`, and a bare actor with no provider prefix is
+the engine's OS-user fallback: kgsm-api parses it into a **human** on the local host, so the audit
+trail read as though someone named `scheduler` had taken the archive. They now stamp
+`actor: "system:scheduler"`, the same `provider:name` form the watchdog uses, which resolves to the
+autonomous leaf — and lets a surface identify the row as scheduler-sourced.
+
+`origin` goes with it: `"scheduler"` is not one of the five surfaces the audit vocabulary knows
+(`ui|assistant|discord|system|api`), so it was normalized away and the row carried no origin at all.
+An autonomous leaf action is `system`.
+
 ### Changed — kgsm-lib 3.1.0
 
 Up from 2.0.0. The engine event journal is now queried directly through the library
