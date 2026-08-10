@@ -14,6 +14,10 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 /// only the operational fact of having asked — when, and whether the ask succeeded — which is what
 /// lets a surface say when this host last looked instead of implying it looks continuously.
 ///
+/// The emitting call carries <c>system:scheduler</c>/<c>system</c> provenance, the same stamp the
+/// scheduled backups use. Without it the engine attributes the announcement to the OS user this
+/// daemon runs as, and an unattended sweep shows up in the audit log as a person having asked.
+///
 /// Separate from <see cref="SchedulerEngine"/> rather than another branch of its tick, because the
 /// two answer to different clocks. A scheduled restart fires at a wall-clock time in the server's own
 /// timezone; a sweep runs on an interval and has no meaningful time of day. Folding an hourly
@@ -144,7 +148,8 @@ internal sealed class UpdateCheckSweep(
         try
         {
             var result = await Task
-                .Run(() => instances.CheckUpdate(name, emit: true), ct)
+                .Run(() => instances.CheckUpdate(name, emit: true,
+                    actor: "system:scheduler", origin: "system"), ct)
                 .ConfigureAwait(false);
 
             bool ok = result.ExitCode == 0;

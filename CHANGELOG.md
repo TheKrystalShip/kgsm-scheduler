@@ -36,6 +36,13 @@ is the part the engine cannot report. When the upstream was really fetched is th
 `checked_at`, on the status read; a server skipped as fresh has a null here and a real `checked_at`
 there, and the two must not be conflated.
 
+### Fixed — an update-available announcement is attributed to the leaf, not to a person
+
+The sweep's `check-update --emit` carried no provenance, so the `instance_update_available` event it
+produced fell back to the OS user this daemon runs as: an unattended hourly sweep appeared in the
+audit log as `heisen` having asked. It stamps `actor: "system:scheduler"`, `origin: "system"` — the
+same pair the scheduled backups use.
+
 ### Fixed — a scheduled backup is attributed to the leaf, not to a person
 
 The backup and prune calls stamped `actor: "scheduler"`, and a bare actor with no provider prefix is
@@ -48,9 +55,14 @@ autonomous leaf — and lets a surface identify the row as scheduler-sourced.
 (`ui|assistant|discord|system|api`), so it was normalized away and the row carried no origin at all.
 An autonomous leaf action is `system`.
 
-### Changed — kgsm-lib 3.1.0
+### Changed — kgsm-lib 4.5.0
 
-Up from 2.0.0. The engine event journal is now queried directly through the library
+Up from 2.0.0. `IInstanceService.CheckUpdate` is what the sweep is built on: `emit` runs the engine's
+recording check, and `actor`/`origin` stamp the announcement it produces. `VersionInfo.CheckedAt` is
+the engine's own record of when an upstream was last fetched, which is what lets the sweep skip a
+server it would otherwise re-ask on every restart.
+
+The engine event journal is now queried directly through the library
 (`IEventJournalHistory`), which retires kgsm-monitor's event index — nothing here read that index, so
 this repo only follows the pin.
 
