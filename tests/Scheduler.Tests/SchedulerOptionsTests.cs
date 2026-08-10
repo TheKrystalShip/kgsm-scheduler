@@ -30,6 +30,40 @@ public class SchedulerOptionsTests
         Assert.Equal("/run/kgsm-scheduler/status.sock", o.StatusSocketPath);
         Assert.Equal(60, o.PollIntervalSeconds);
         Assert.Equal(10, o.GraceWindowMinutes);
+        Assert.True(o.UpdateCheckEnabled);
+        Assert.Equal(60, o.UpdateCheckIntervalMinutes);
+        Assert.Equal(5, o.UpdateCheckStaggerSeconds);
+    }
+
+    // Off has to be reachable and unambiguous: it means nothing on this host asks upstream, so no
+    // update is ever announced. A default that could not be turned off would make the daemon
+    // generate traffic an operator cannot stop.
+    [Fact]
+    public void Update_checks_can_be_turned_off()
+    {
+        Assert.False(Bind((nameof(SchedulerSettings.UpdateCheckEnabled), "false")).UpdateCheckEnabled);
+    }
+
+    // Same floor reasoning as the poll interval: the sweep drives a timer with this period, and the
+    // roster is walked serially, so a value below the floor is raised rather than taken literally.
+    [Theory]
+    [InlineData("0", SchedulerOptions.MinUpdateCheckIntervalMinutes)]
+    [InlineData("-1", SchedulerOptions.MinUpdateCheckIntervalMinutes)]
+    [InlineData("1", SchedulerOptions.MinUpdateCheckIntervalMinutes)]
+    [InlineData("360", 360)]
+    public void Update_check_interval_is_raised_to_its_floor(string written, int expected)
+    {
+        Assert.Equal(expected,
+            Bind((nameof(SchedulerSettings.UpdateCheckIntervalMinutes), written)).UpdateCheckIntervalMinutes);
+    }
+
+    // Zero is a legitimate stagger — check the roster back to back — so it is clamped at zero rather
+    // than raised to a floor.
+    [Fact]
+    public void A_negative_stagger_becomes_zero()
+    {
+        Assert.Equal(0,
+            Bind((nameof(SchedulerSettings.UpdateCheckStaggerSeconds), "-9")).UpdateCheckStaggerSeconds);
     }
 
     [Fact]
@@ -74,10 +108,18 @@ public class SchedulerOptionsTests
     {
         var o = Bind(
             (nameof(SchedulerSettings.PollIntervalSeconds), ""),
-            (nameof(SchedulerSettings.GraceWindowMinutes), ""));
+            (nameof(SchedulerSettings.GraceWindowMinutes), ""),
+            (nameof(SchedulerSettings.UpdateCheckEnabled), ""),
+            (nameof(SchedulerSettings.UpdateCheckIntervalMinutes), ""),
+            (nameof(SchedulerSettings.UpdateCheckStaggerSeconds), ""));
 
         Assert.Equal(60, o.PollIntervalSeconds);
         Assert.Equal(10, o.GraceWindowMinutes);
+        // Blank must not read as "off" — a stray line in an env file would silently stop this host
+        // ever looking for an update, and nothing would say so.
+        Assert.True(o.UpdateCheckEnabled);
+        Assert.Equal(60, o.UpdateCheckIntervalMinutes);
+        Assert.Equal(5, o.UpdateCheckStaggerSeconds);
     }
 
     // The other half of the contract: a value that is present but is not a number is NOT quietly

@@ -3,7 +3,7 @@
   "id": "scheduler",
   "displayName": "Scheduler",
   "unit": "kgsm-scheduler.service",
-  "role": "Fires each server's scheduled restarts and backups at wall-clock time, through the watchdog.",
+  "role": "Fires each server's scheduled restarts and backups at wall-clock time through the watchdog, and sweeps the roster for newer game builds.",
   "onDemand": false,
   "applyMode": "restart",
   "floorSources": [
@@ -35,6 +35,11 @@
       "id": "timing",
       "label": "Timing",
       "order": 3
+    },
+    {
+      "id": "updates",
+      "label": "Game updates",
+      "order": 4
     }
   ],
   "fields": [
@@ -109,6 +114,40 @@
       "default": "10",
       "min": 0,
       "unit": "min",
+      "risk": "safe"
+    },
+    {
+      "key": "updateCheckEnabled",
+      "env": "Scheduler__UpdateCheckEnabled",
+      "label": "Check for game updates",
+      "description": "Whether to check each server for a newer game build. Turning this off means nothing on this host ever asks upstream, so no update notification is raised — servers keep running exactly as they are.",
+      "group": "updates",
+      "type": "bool",
+      "default": "true",
+      "risk": "safe"
+    },
+    {
+      "key": "updateCheckIntervalMin",
+      "env": "Scheduler__UpdateCheckIntervalMinutes",
+      "label": "Update check interval",
+      "description": "How often every server is checked for a newer build. A game release is not a fast-moving fact and each check costs a real request to the game's upstream, so hourly is generous.",
+      "group": "updates",
+      "type": "int",
+      "default": "60",
+      "min": 5,
+      "unit": "min",
+      "risk": "safe"
+    },
+    {
+      "key": "updateCheckStaggerSec",
+      "env": "Scheduler__UpdateCheckStaggerSeconds",
+      "label": "Update check stagger",
+      "description": "How long to wait between checking one server and the next. Each server asks its own upstream, so this spreads the requests out instead of sending them all in the same second.",
+      "group": "updates",
+      "type": "int",
+      "default": "5",
+      "min": 0,
+      "unit": "s",
       "risk": "safe"
     }
   ]

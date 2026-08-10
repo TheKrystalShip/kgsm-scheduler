@@ -56,6 +56,7 @@ internal sealed class Program
         builder.Services.AddKgsmWatchdogClient(options.WatchdogSocketPath);
 
         builder.Services.AddHostedService<SchedulerEngine>();
+        builder.Services.AddHostedService<UpdateCheckSweep>();
         builder.Services.AddHostedService<StatusSocketServer>();
 
         var host = builder.Build();

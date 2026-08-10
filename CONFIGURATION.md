@@ -30,6 +30,9 @@ Panel renders). A test fails the build if any of the three is missing one of the
 | `Scheduler:StatusSocketPath` | `Scheduler__StatusSocketPath` | `/run/kgsm-scheduler/status.sock` | Unix socket the schedule snapshot is served on, one NDJSON line per connection. `kgsm-api` reads it here for the `/settings` aggregation. The unit creates the parent directory (`RuntimeDirectory=kgsm-scheduler`). |
 | `Scheduler:PollIntervalSeconds` | `Scheduler__PollIntervalSeconds` | `60` | How often each server's schedule is re-read from KGSM. Bounds how quickly a schedule change takes effect; does not affect the accuracy of a fire already scheduled. Anything below 5 is raised to 5. |
 | `Scheduler:GraceWindowMinutes` | `Scheduler__GraceWindowMinutes` | `10` | How late a missed restart may be and still run. Anything later is skipped, so a host that was down does not come back to a burst of catch-up restarts. Zero always runs missed restarts. |
+| `Scheduler:UpdateCheckEnabled` | `Scheduler__UpdateCheckEnabled` | `true` | Whether to sweep every server for a newer game build. False means nothing on this host ever asks upstream, so no update is announced. |
+| `Scheduler:UpdateCheckIntervalMinutes` | `Scheduler__UpdateCheckIntervalMinutes` | `60` | How often the whole roster is swept. Each server asks its own upstream, so the cost is linear in servers. Anything below 5 is raised to 5. |
+| `Scheduler:UpdateCheckStaggerSeconds` | `Scheduler__UpdateCheckStaggerSeconds` | `5` | Pause between one server's check and the next. The sweep is serial by design; this spreads the requests out further. Zero checks back to back. |
 | `Logging:LogLevel:Default` | `Logging__LogLevel__Default` | `Information` | Minimum severity logged, to the journal. |
 
 Out-of-range numbers are clamped and blank strings fall back to the coded default, so a hand-edited

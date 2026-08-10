@@ -9,7 +9,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
-    <Version>2.3.1</Version>
+    <Version>2.4.0</Version>
 
     <!-- The leaf config descriptor is generated from SchedulerSettings. These name the two files the
          generator works between; the attribute source, the documentation file the <panel> tags travel
@@ -28,7 +28,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" />
-    <PackageReference Include="TheKrystalShip.KGSM.Lib" Version="3.1.0" />
+    <PackageReference Include="TheKrystalShip.KGSM.Lib" Version="4.4.0" />
   </ItemGroup>
 
   <ItemGroup>

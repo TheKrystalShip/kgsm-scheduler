@@ -22,7 +22,10 @@ internal sealed record SchedulerInstanceStatus(
     string? BackupSchedule = null,
     string? BackupTime = null,
     string? BackupDay = null,
-    DateTimeOffset? NextBackupUtc = null
+    DateTimeOffset? NextBackupUtc = null,
+    DateTimeOffset? LastUpdateCheckUtc = null,
+    bool? LastUpdateCheckOk = null,
+    string? LastUpdateCheckMessage = null
 );
 
 internal sealed record SchedulerStatusResponse(
@@ -47,7 +50,10 @@ internal sealed record ScheduleState(
     bool? LastBackupOk = null,
     string? LastBackupMessage = null,
     SchedulePlan? Restart = null,
-    SchedulePlan? Backup = null);
+    SchedulePlan? Backup = null,
+    DateTimeOffset? LastUpdateCheckUtc = null,
+    bool? LastUpdateCheckOk = null,
+    string? LastUpdateCheckMessage = null);
 
 internal sealed class SchedulerEngine(
     IInstanceService instances,
@@ -136,7 +142,8 @@ internal sealed class SchedulerEngine(
                 current.LastBackupUtc, current.LastBackupOk, current.LastBackupMessage,
                 ScheduleClock.IsActive(instance.BackupSchedule) ? instance.BackupSchedule : "off",
                 instance.BackupTime, instance.BackupDay,
-                AsOffset(backup.NextUtc)));
+                AsOffset(backup.NextUtc),
+                current.LastUpdateCheckUtc, current.LastUpdateCheckOk, current.LastUpdateCheckMessage));
         }
 
         registry.Snapshot = new SchedulerStatusResponse(statuses);

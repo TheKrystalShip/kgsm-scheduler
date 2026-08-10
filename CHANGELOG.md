@@ -4,6 +4,38 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Added — the scheduler sweeps the roster for newer game builds
+
+A second cadence beside the wall-clock schedules: every `UpdateCheckIntervalMinutes` (hourly by
+default) each server is asked whether a newer build exists, via `check-update --emit`. The scheduler
+holds no answer and makes no judgement — kgsm fetches the upstream version, records it beside the
+instance and emits `instance_update_available` for a version it has not announced before. Update
+availability becomes a fact every surface reads from the journal instead of something each one polls
+for.
+
+Its own `BackgroundService` rather than another branch of the engine's tick, because the two answer
+to different clocks: a scheduled restart fires at a wall-clock time in the server's timezone, while a
+sweep runs on an interval and has no meaningful time of day.
+
+**Serial and staggered.** Each server asks its own upstream, so running the roster together means as
+many simultaneous steamcmd logins as there are servers, in the same second, against hosts with every
+reason to throttle that. The roster is walked one at a time with `UpdateCheckStaggerSeconds` between.
+A failed check is logged and the sweep moves on; the next sweep tries again.
+
+**The cadence belongs to the interval, not to the daemon's uptime.** A `PeriodicTimer` fires
+immediately on start, so a sweep that consulted nothing would re-ask every upstream on every restart
+— a few deploys in a row becoming a burst of logins for an answer taken minutes ago. The sweep reads
+the engine's own `checked_at` record first (a fast status read, no network) and leaves alone anything
+checked within half the interval. Half rather than the whole: a sweep staggers, so the server checked
+last is fractionally younger than one interval when the next sweep begins, and measuring against the
+full interval would skip it and let it go two intervals stale.
+
+`lastUpdateCheckUtc` / `lastUpdateCheckOk` / `lastUpdateCheckMessage` join the status snapshot. These
+are the **sweep's own** record — when this daemon last attempted a check and what went wrong — which
+is the part the engine cannot report. When the upstream was really fetched is the engine's
+`checked_at`, on the status read; a server skipped as fresh has a null here and a real `checked_at`
+there, and the two must not be conflated.
+
 ### Fixed — a scheduled backup is attributed to the leaf, not to a person
 
 The backup and prune calls stamped `actor: "scheduler"`, and a bare actor with no provider prefix is

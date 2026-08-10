@@ -30,7 +30,20 @@
 
     // How late a missed restart may be and still run (minutes). Anything later is skipped, so a
     // host that was down does not come back to a burst of catch-up restarts. Zero always runs them.
-    "GraceWindowMinutes": 10
+    "GraceWindowMinutes": 10,
+
+    // Whether to sweep every server for a newer game build. False means nothing on this host ever
+    // asks upstream, so no update is announced — servers keep running exactly as they are.
+    "UpdateCheckEnabled": true,
+
+    // How often the whole roster is swept (minutes). A game release is not a fast-moving fact and
+    // each server asks its own upstream, so the cost is linear in servers. Anything below 5 is
+    // raised to 5.
+    "UpdateCheckIntervalMinutes": 60,
+
+    // Pause between one server's check and the next, within a sweep (seconds). The sweep is serial
+    // by design; this spreads the requests out further still.
+    "UpdateCheckStaggerSeconds": 5
   },
 
   "Logging": {

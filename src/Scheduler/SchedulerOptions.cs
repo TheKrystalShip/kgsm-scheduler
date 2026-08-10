@@ -7,6 +7,14 @@ internal sealed class SchedulerOptions
     /// taking the daemon down at startup.</summary>
     public const int MinPollIntervalSeconds = 5;
 
+    /// <summary>
+    /// The shortest update-check interval the sweep accepts. Every check is a real request to a game's
+    /// upstream and the roster is walked one server at a time, so a sweep set tighter than this could
+    /// still be running when the next one is due — and the floor also keeps a hand-edited zero from
+    /// throwing the timer it drives.
+    /// </summary>
+    public const int MinUpdateCheckIntervalMinutes = 5;
+
     public string KgsmPath { get; init; } = "/usr/bin/kgsm";
     public string WatchdogSocketPath { get; init; } = "/run/kgsm-watchdog/control.sock";
     public string StatusSocketPath { get; init; } = "/run/kgsm-scheduler/status.sock";
@@ -17,6 +25,23 @@ internal sealed class SchedulerOptions
     /// skip it rather than firing a surprise restart. Prevents catch-up storms.
     /// </summary>
     public int GraceWindowMinutes { get; init; } = 10;
+
+    /// <summary>Whether to sweep the roster for newer game builds at all.</summary>
+    public bool UpdateCheckEnabled { get; init; } = true;
+
+    /// <summary>
+    /// How often the whole roster is swept (minutes). Hourly by default: a game release is not a
+    /// fast-moving fact, and the cost of a sweep is linear in the number of servers because each one
+    /// asks its own upstream. At least <see cref="MinUpdateCheckIntervalMinutes"/>.
+    /// </summary>
+    public int UpdateCheckIntervalMinutes { get; init; } = 60;
+
+    /// <summary>
+    /// Pause between one server's check and the next. The sweep is serial by design — firing every
+    /// check at once means N simultaneous steamcmd logins in the same second — and this spreads what
+    /// remains out further.
+    /// </summary>
+    public int UpdateCheckStaggerSeconds { get; init; } = 5;
 
     /// <summary>
     /// Validates what configuration supplied and produces the form the daemon runs on. Out-of-range
@@ -33,6 +58,12 @@ internal sealed class SchedulerOptions
             StatusSocketPath = Or(s.StatusSocketPath, defaults.StatusSocketPath),
             PollIntervalSeconds = Math.Max(s.PollIntervalSeconds ?? defaults.PollIntervalSeconds, MinPollIntervalSeconds),
             GraceWindowMinutes = Math.Max(s.GraceWindowMinutes ?? defaults.GraceWindowMinutes, 0),
+            UpdateCheckEnabled = s.UpdateCheckEnabled ?? defaults.UpdateCheckEnabled,
+            UpdateCheckIntervalMinutes = Math.Max(
+                s.UpdateCheckIntervalMinutes ?? defaults.UpdateCheckIntervalMinutes,
+                MinUpdateCheckIntervalMinutes),
+            UpdateCheckStaggerSeconds = Math.Max(
+                s.UpdateCheckStaggerSeconds ?? defaults.UpdateCheckStaggerSeconds, 0),
         };
     }
 

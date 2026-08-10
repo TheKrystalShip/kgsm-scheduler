@@ -67,4 +67,26 @@ internal sealed class SchedulerSettings
     /// restarts.</panel>
     [LeafField("graceWindowMin", "Missed-fire grace window", Group = "timing", Min = 0, Unit = "min")]
     public int? GraceWindowMinutes { get; set; }
+
+    /// <summary>Whether to sweep every server for a newer game build. Off means nothing on this host
+    /// ever asks, and no update is announced.</summary>
+    /// <panel>Whether to check each server for a newer game build. Turning this off means nothing on
+    /// this host ever asks upstream, so no update notification is raised — servers keep running
+    /// exactly as they are.</panel>
+    [LeafField("updateCheckEnabled", "Check for game updates", Group = "updates", Type = LeafType.Bool)]
+    public bool? UpdateCheckEnabled { get; set; }
+
+    /// <summary>How often the whole roster is swept for updates (minutes). Raised to
+    /// <see cref="SchedulerOptions.MinUpdateCheckIntervalMinutes"/> if lower.</summary>
+    /// <panel>How often every server is checked for a newer build. A game release is not a fast-moving
+    /// fact and each check costs a real request to the game's upstream, so hourly is generous.</panel>
+    [LeafField("updateCheckIntervalMin", "Update check interval", Group = "updates",
+        Min = SchedulerOptions.MinUpdateCheckIntervalMinutes, Unit = "min")]
+    public int? UpdateCheckIntervalMinutes { get; set; }
+
+    /// <summary>Pause between one server's update check and the next, within a sweep (seconds).</summary>
+    /// <panel>How long to wait between checking one server and the next. Each server asks its own
+    /// upstream, so this spreads the requests out instead of sending them all in the same second.</panel>
+    [LeafField("updateCheckStaggerSec", "Update check stagger", Group = "updates", Min = 0, Unit = "s")]
+    public int? UpdateCheckStaggerSeconds { get; set; }
 }
