@@ -18,6 +18,7 @@ internal sealed class SchedulerOptions
     public string KgsmPath { get; init; } = "/usr/bin/kgsm";
     public string WatchdogSocketPath { get; init; } = "/run/kgsm-watchdog/control.sock";
     public string StatusSocketPath { get; init; } = "/run/kgsm-scheduler/status.sock";
+    public string ControlSocketPath { get; init; } = "/run/kgsm-scheduler/control.sock";
     /// <summary>How often to re-scan instance schedule config (seconds). At least <see cref="MinPollIntervalSeconds"/>.</summary>
     public int PollIntervalSeconds { get; init; } = 60;
     /// <summary>
@@ -56,6 +57,7 @@ internal sealed class SchedulerOptions
             KgsmPath = Or(s.KgsmPath, defaults.KgsmPath),
             WatchdogSocketPath = Or(s.WatchdogSocketPath, defaults.WatchdogSocketPath),
             StatusSocketPath = Or(s.StatusSocketPath, defaults.StatusSocketPath),
+            ControlSocketPath = Or(s.ControlSocketPath, defaults.ControlSocketPath),
             PollIntervalSeconds = Math.Max(s.PollIntervalSeconds ?? defaults.PollIntervalSeconds, MinPollIntervalSeconds),
             GraceWindowMinutes = Math.Max(s.GraceWindowMinutes ?? defaults.GraceWindowMinutes, 0),
             UpdateCheckEnabled = s.UpdateCheckEnabled ?? defaults.UpdateCheckEnabled,

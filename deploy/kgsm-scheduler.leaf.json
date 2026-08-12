@@ -93,6 +93,17 @@
       "pairedApiKey": "Api__SchedulerSocketPath"
     },
     {
+      "key": "controlSocket",
+      "env": "Scheduler__ControlSocketPath",
+      "label": "Control socket",
+      "description": "Unix socket the scheduler takes instructions on — postponing a scheduled restart, for instance. Separate from the status socket, which is read-only.",
+      "group": "wiring",
+      "type": "path",
+      "default": "/run/kgsm-scheduler/control.sock",
+      "risk": "wiring",
+      "pairedApiKey": "Api__SchedulerControlSocketPath"
+    },
+    {
       "key": "pollIntervalSec",
       "env": "Scheduler__PollIntervalSeconds",
       "label": "Schedule re-scan interval",

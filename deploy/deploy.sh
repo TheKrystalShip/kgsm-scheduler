@@ -53,6 +53,26 @@ install_units_unprivileged
 # Before the swap, so the surface kgsm-api reads never lags the binary that implements it.
 install_leaf_descriptor
 
+# ── 2c. Publish the command manifest ──────────────────────────────────────────
+# What this daemon can be TOLD, as opposed to what it can be configured with. It sits one directory
+# below the descriptors, and that placement is load-bearing: the descriptor scan globs *.json at the
+# top level and would read a manifest there as a malformed descriptor on every deploy. Installed
+# unprivileged, because the parent directory is ours.
+install_command_manifest() {
+    local src="${REPO_DIR}/deploy/${PROJECT}.commands.json"
+    [[ -f "$src" ]] || { warn "no command manifest at ${src} — the Control Panel will list no commands."; return 0; }
+
+    local dir="${LEAF_DESCRIPTOR_DIR}/commands"
+    mkdir -p "$dir"
+
+    local dst="${dir}/${LEAF_ID}.json"
+    if ! cmp -s "$src" "$dst"; then
+        log "command manifest changed → ${dst}"
+        install -m 0644 "$src" "$dst"
+    fi
+}
+install_command_manifest
+
 # ── 3. The swap ────────────────────────────────────────────────────────────────
 log "stopping ${SERVICE}"
 sysctl_do stop "$SERVICE" || true

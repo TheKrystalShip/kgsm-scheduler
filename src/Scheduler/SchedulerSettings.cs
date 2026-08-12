@@ -53,6 +53,14 @@ internal sealed class SchedulerSettings
         Risk = LeafRisk.Wiring, PairedApiKey = "Api__SchedulerSocketPath")]
     public string StatusSocketPath { get; set; } = "/run/kgsm-scheduler/status.sock";
 
+    /// <summary>Unix socket the scheduler takes instructions on, one NDJSON request and one reply per
+    /// connection. Separate from the status socket, whose contract is that a client only ever reads.</summary>
+    /// <panel>Unix socket the scheduler takes instructions on — postponing a scheduled restart, for
+    /// instance. Separate from the status socket, which is read-only.</panel>
+    [LeafField("controlSocket", "Control socket", Group = "wiring", Type = LeafType.Path,
+        Risk = LeafRisk.Wiring, PairedApiKey = "Api__SchedulerControlSocketPath")]
+    public string ControlSocketPath { get; set; } = "/run/kgsm-scheduler/control.sock";
+
     /// <summary>How often each server's schedule is re-read from KGSM (seconds). Raised to
     /// <see cref="SchedulerOptions.MinPollIntervalSeconds"/> if lower.</summary>
     /// <panel>How often each server's schedule is re-read from KGSM. This bounds how quickly a schedule

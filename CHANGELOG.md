@@ -4,6 +4,36 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Added — a control socket, and one thing to say on it
+
+`postpone` pushes a server's next scheduled restart back without touching its schedule. The instance's
+kgsm config is untouched, so the fire *after* the postponed one lands exactly where it always would
+have — which is what makes it "not tonight" rather than a reschedule, and why it needs nothing from
+kgsm. Defaults to an hour, capped at twelve: past that it is a schedule change, and a schedule change
+belongs in the instance's own config where it survives a restart of this daemon.
+
+**A second socket rather than a second use of the status one.** That socket's contract is that a
+client connects and only ever reads, and everything reading it depends on that; teaching it to wait
+for an optional request first would put a timeout in front of every status read to serve a command
+that arrives rarely.
+
+The move is applied under the registry's lock, so a tick landing mid-write cannot overwrite the new
+target with the one it read a moment ago, and it survives ticks because a postponement does not change
+the plan's signature — which is what `Plan()` keys a standing target on.
+
+⚠ **The daemon enforces no authorization here, and the shipped command manifest says so** (`gates`
+bucket `none`). A unix socket carries no identity; the only restriction is the filesystem permission
+on it, the same posture the status socket has always had. A caller wanting a tier check owes it
+itself.
+
+⚠ **A postponement does not survive a restart of this daemon** — the standing target is in memory, so
+a restart recomputes it from config and the deferred fire returns. The honest consequence of not
+editing the schedule.
+
+The daemon now ships a command manifest (`deploy/kgsm-scheduler.commands.json`), installed into
+`/var/lib/kgsm/leaves/commands/` on every deploy, so what it can be told is documented without
+`kgsm-api` learning a thing about it.
+
 ### Added — the scheduler sweeps the roster for newer game builds
 
 A second cadence beside the wall-clock schedules: every `UpdateCheckIntervalMinutes` (hourly by

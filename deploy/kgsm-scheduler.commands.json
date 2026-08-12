@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 2,
+  "leaf": "scheduler",
+  "surface": "socket",
+  "gates": {
+    "none": [
+      {
+        "name": "postpone",
+        "description": "Push a server's next scheduled restart back, without changing its schedule",
+        "mutates": true,
+        "options": [
+          {
+            "name": "instance",
+            "description": "The server whose next restart is deferred",
+            "type": "string",
+            "required": true,
+            "autocomplete": false
+          },
+          {
+            "name": "minutes",
+            "description": "How far to push it back, 1 to 720. Defaults to 60.",
+            "type": "integer",
+            "required": false,
+            "autocomplete": false
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -58,6 +58,7 @@ internal sealed class Program
         builder.Services.AddHostedService<SchedulerEngine>();
         builder.Services.AddHostedService<UpdateCheckSweep>();
         builder.Services.AddHostedService<StatusSocketServer>();
+        builder.Services.AddHostedService<ControlSocketServer>();
 
         var host = builder.Build();
 

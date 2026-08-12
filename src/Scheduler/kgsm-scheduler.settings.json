@@ -23,6 +23,10 @@
     // creates the parent directory (RuntimeDirectory=kgsm-scheduler).
     "StatusSocketPath": "/run/kgsm-scheduler/status.sock",
 
+    // Unix socket the daemon takes instructions on — postponing a scheduled restart, for instance.
+    // Separate from the status socket, whose contract is that a client only ever reads.
+    "ControlSocketPath": "/run/kgsm-scheduler/control.sock",
+
     // How often each server's schedule is re-read from KGSM (seconds). This bounds how quickly a
     // schedule change takes effect; it does not affect the accuracy of a fire already scheduled.
     // Anything below 5 is raised to 5.

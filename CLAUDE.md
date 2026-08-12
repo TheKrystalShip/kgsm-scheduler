@@ -40,6 +40,11 @@ owns autostart + crash-restart + CPU/mem caps. See `tks/server-settings-plan.md`
 - `src/Scheduler/StatusSocketServer.cs` — `BackgroundService` that serves the current
   status snapshot as one NDJSON line per connection over a unix socket. Health =
   connect + parse.
+- `src/Scheduler/ControlSocketServer.cs` — the socket the daemon can be *told* something
+  on: one NDJSON request in, one reply out. A second socket rather than a second use of
+  the first, because the status socket's contract is that a client connects and only
+  reads — teaching it to wait for an optional request would put a timeout in front of
+  every status read to serve a command that arrives rarely. See **Control socket** below.
 - `src/Scheduler/SchedulerSettings.cs` — the configuration surface, shaped 1:1 to the
   `Scheduler` section of `kgsm-scheduler.settings.json` and bound in one step. Holds
   what was *written*, unvalidated.
@@ -129,3 +134,34 @@ fetched. A server skipped as recently-checked is null here while the engine hold
 `checked_at` for it, and a failed attempt has a time here with no new `checked_at` there. A
 surface answering *"when was this last checked for updates"* wants the engine's `checked_at`
 from the status read; these three fields answer *"is the sweep working, and what failed"*.
+
+## Control socket
+
+Default `/run/kgsm-scheduler/control.sock` (`Scheduler__ControlSocketPath`). One NDJSON request
+per connection, one reply, then closed:
+
+```
+→ {"command":"postpone","instance":"factorio-01","minutes":60}
+← {"ok":true,"message":"postponed 60 minute(s)","nextFireUtc":"2026-08-13T05:00:00+00:00"}
+```
+
+`postpone` is the only command. `minutes` defaults to 60 and is capped at 720: past that it is a
+schedule change, and a schedule change belongs in the instance's own config where it survives a
+restart of this daemon.
+
+**It moves the standing target, it does not edit the schedule.** The instance's kgsm config is
+untouched, so the fire *after* the postponed one lands exactly where it always would have — which is
+what makes this "not tonight" rather than a reschedule, and why it needs nothing from kgsm. The move
+is applied under the registry's lock, so a tick landing mid-write cannot overwrite the new target
+with the one it read a moment ago. It survives ticks because `Plan()` keeps a standing plan while its
+signature matches, and a postponement does not change the signature.
+
+⚠ **The daemon enforces no authorization here, and the shipped command manifest says so** (`gates`
+bucket `none`). A unix socket carries no identity; the only restriction is the filesystem permission
+on the socket, which is the same posture the status socket has always had. A caller that wants a
+tier check owes it itself — `kgsm-api` gates its Postpone button at operator before it dials this.
+
+**A postponement does not survive a restart of this daemon.** The standing target lives in the
+in-memory registry, so a restart recomputes it from the instance's config and the deferred fire comes
+back. That is the honest consequence of not editing the schedule, and it is the right trade for a
+verb that means "not for the next hour".
