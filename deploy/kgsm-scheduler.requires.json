@@ -1,0 +1,31 @@
+{
+  "project": "kgsm-scheduler",
+  "leafId": "scheduler",
+  "role": "leaf",
+  "runtime": {
+    "kind": "native-aot",
+    "note": "A single native binary. The host needs no .NET runtime."
+  },
+  "commands": [
+    { "name": "kgsm", "package": "kgsm", "required": true, "probe": "kgsm --version", "why": "reads each instance's schedule config through kgsm-lib" },
+
+    { "name": "python3", "package": "python", "required": false, "probe": "python3 --version", "why": "deploy.sh's health probe opens the status socket, which bash cannot do", "without": "the probe degrades to `systemctl is-active` and says so rather than claiming a stronger check" }
+  ],
+  "services": [
+    { "name": "kgsm-watchdog.service", "required": true, "why": "every scheduled restart is issued as IWatchdogClient.RestartAsync — the scheduler never stops a server itself", "without": "schedules are computed and every fire fails" }
+  ],
+  "system": [
+    { "feature": "tzdata", "required": true, "probe": "test -d /usr/share/zoneinfo", "why": "fire times are wall-clock in each instance's IANA timezone", "note": "TimeZoneInfo reads /usr/share/zoneinfo directly; InvariantGlobalization=true does not break it." }
+  ],
+  "units": {
+    "system": ["kgsm-scheduler.service"],
+    "user": []
+  },
+  "paths": {
+    "prefix": "/opt/kgsm-scheduler",
+    "state": [],
+    "runtime": ["/run/kgsm-scheduler"],
+    "config": ["/etc/kgsm-scheduler/kgsm-scheduler.env"],
+    "descriptor": "/var/lib/kgsm/leaves/scheduler.json"
+  }
+}

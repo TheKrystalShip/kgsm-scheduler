@@ -52,10 +52,9 @@ LEAF_DESCRIPTOR="${REPO_DIR}/deploy/${PROJECT}.leaf.json"
 # the kgsm- prefix, but NOT always: kgsm-llm ships the leaf "assistant". State it, don't derive it.
 LEAF_ID="${PROJECT#kgsm-}"
 
-# The scheduler's unit lives in systemd/, not deploy/.
 render_unit() {   # $1 = unit filename
     sed "s/^User=.*/User=${DEPLOY_USER}/; s/^Group=.*/Group=${DEPLOY_GROUP}/" \
-        "${REPO_DIR}/systemd/$1"
+        "${REPO_DIR}/deploy/$1"
 }
 
 # The daemon's documented health signal is its status socket: connect and read one NDJSON line.
@@ -91,6 +90,28 @@ SYSTEMD_DIR="/etc/systemd/system"
 # The polkit grant setup.sh installs: lets DEPLOY_USER drive systemctl for THIS project's units
 # with no password and no interactive auth agent.
 POLKIT_DST="/etc/polkit-1/rules.d/48-${PROJECT}-deploy.rules"
+
+# The polkit rule's CONTENT is a committed file, not a heredoc, so what the host grants can be
+# read and reviewed without running anything. Only the deploying user and the unit list cannot be
+# known until install time, and those are the template's two placeholders.
+POLKIT_TEMPLATE="${REPO_DIR}/deploy/polkit/48-${PROJECT}-deploy.rules.in"
+
+render_polkit_rule() {
+    [[ -f "$POLKIT_TEMPLATE" ]] || { err "missing polkit template: ${POLKIT_TEMPLATE}"; return 1; }
+
+    local units_js="" u
+    for u in "${UNITS[@]}"; do
+        units_js+="        \"${u}\": true,"$'\n'
+    done
+    units_js="${units_js%$'\n'}"
+
+    local rendered
+    rendered="$(< "$POLKIT_TEMPLATE")"
+    rendered="${rendered//@PROJECT@/${PROJECT}}"
+    rendered="${rendered//@DEPLOY_USER@/${DEPLOY_USER}}"
+    rendered="${rendered//@UNITS@/${units_js}}"
+    printf '%s\n' "$rendered"
+}
 
 SERVICE="${UNITS[0]}"           # the primary unit, e.g. kgsm-api.service
 PUBLISH_DIR="${REPO_DIR}/artifacts/publish"

@@ -60,7 +60,7 @@ owns autostart + crash-restart + CPU/mem caps. See `tks/server-settings-plan.md`
 - `CONFIGURATION.md` — full reference for all settings, env vars, and defaults.
 - `src/Scheduler/Json/SchedulerJsonContext.cs` — source-generated JSON context
   (AOT: all serialization goes through this).
-- `systemd/kgsm-scheduler.service` — the service unit.
+- `deploy/kgsm-scheduler.service` — the service unit.
 - `deploy/setup.sh` + `deploy/deploy.sh` + `deploy/deploy-common.sh` — see **Deploying** below.
 
 ## Build

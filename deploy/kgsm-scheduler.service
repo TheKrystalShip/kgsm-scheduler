@@ -4,7 +4,8 @@ After=network.target
 
 [Service]
 Type=exec
-User=heisen
+User=kgsm
+Group=kgsm
 ExecStart=/opt/kgsm-scheduler/kgsm-scheduler
 # Start the daemon in its own install prefix so the process working directory is never "/". The
 # daemon pins its content root in code and does not depend on this, but a service left at "/" makes
