@@ -2,7 +2,7 @@
 
 All notable changes to `kgsm-scheduler` are documented here.
 
-## [Unreleased]
+## [2.5.1] - 2026-08-14
 
 ### Added — GPL-3.0-or-later
 
