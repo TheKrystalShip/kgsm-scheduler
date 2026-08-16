@@ -2,6 +2,25 @@
 
 All notable changes to `kgsm-scheduler` are documented here.
 
+## [2.6.0] - 2026-08-16
+
+### Added — a state directory, for the journal this leaf will own
+
+`StateDirectory=kgsm-scheduler` at `StateDirectoryMode=0750`. This daemon is the one leaf that had
+neither, because it is the one leaf that persists nothing — its standing targets live in memory and
+its schedule is kgsm's config.
+
+That changes with leaf lifecycle events, where every leaf records its own starts, stops and
+degradations to its own journal under its own state directory. Declaring the directory now is what
+makes that a code change rather than a code change plus a host reprovision, and an empty directory
+costs nothing meanwhile.
+
+`0750` with `Group=kgsm` rather than `0700`, because a producer's journal is read by every other
+component on the host and a directory cannot be entered without execute on every directory above it.
+⚠ A state directory closed to the group hides the journal inside it **silently** — a reader that
+cannot traverse in sees no journal rather than a permission error, which is indistinguishable from a
+leaf that has recorded nothing.
+
 ## [2.5.1] - 2026-08-14
 
 ### Added — GPL-3.0-or-later

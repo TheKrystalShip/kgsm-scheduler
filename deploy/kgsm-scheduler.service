@@ -18,6 +18,18 @@ RestartSec=5s
 EnvironmentFile=-/etc/kgsm-scheduler/kgsm-scheduler.env
 RuntimeDirectory=kgsm-scheduler
 RuntimeDirectoryMode=0755
+
+# systemd creates /var/lib/kgsm-scheduler owned by this user, persistent across reboots — where this
+# leaf's own event journal goes. The runtime dir above is tmpfs, and a journal is the durable record
+# of what this daemon did.
+#
+# 0750 with Group=kgsm rather than 0700: a producer's journal is read by every other component on the
+# host, which may run as a different service account, and a directory cannot be entered without
+# execute on every directory above it. A state directory closed to the group hides the journal inside
+# it — and hides it silently, because a reader that cannot traverse in sees no journal rather than a
+# permission error, which is indistinguishable from a leaf that has recorded nothing.
+StateDirectory=kgsm-scheduler
+StateDirectoryMode=0750
 NoNewPrivileges=true
 PrivateTmp=true
 
