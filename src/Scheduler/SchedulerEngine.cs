@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheKrystalShip.KGSM.Core.Interfaces;
+using TheKrystalShip.KGSM.Lifecycle;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -58,6 +59,7 @@ internal sealed record ScheduleState(
 internal sealed class SchedulerEngine(
     IInstanceService instances,
     IWatchdogClient watchdog,
+    LeafLifecycle lifecycle,
     IOptions<SchedulerOptions> options,
     ScheduleRegistry registry,
     ILogger<SchedulerEngine> logger) : BackgroundService
@@ -74,20 +76,81 @@ internal sealed class SchedulerEngine(
         logger.LogInformation("Scheduler engine started (poll={Poll}s, grace={Grace}min)",
             options.Value.PollIntervalSeconds, options.Value.GraceWindowMinutes);
 
+        // The loop is running, so this daemon is doing the thing it exists to do. Whether it can
+        // reach what it dispatches through is a separate question, reported per tick below.
+        lifecycle.MarkReady(
+            $"polling every {options.Value.PollIntervalSeconds}s "
+            + $"(grace {options.Value.GraceWindowMinutes}min)");
+
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(options.Value.PollIntervalSeconds));
         do
         {
             try { await TickAsync(ct).ConfigureAwait(false); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             catch (Exception ex) { logger.LogError(ex, "Scheduler tick error"); }
+
+            await ReportWatchdogAsync(ct).ConfigureAwait(false);
         }
         while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Reports whether the watchdog is reachable, on every poll rather than when a restart is due.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ By the time a schedule comes due somebody is already waiting for a restart that will not
+    /// happen. Probing on the tick is what turns the most silent failure in this ecosystem into one
+    /// that announces itself. The probe is a request on a unix socket, which is why it is affordable
+    /// at this cadence.
+    /// </remarks>
+    private async Task ReportWatchdogAsync(CancellationToken ct)
+    {
+        bool reachable;
+
+        try
+        {
+            reachable = await watchdog.IsReadyAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception)
+        {
+            reachable = false;
+        }
+
+        if (reachable)
+        {
+            lifecycle.MarkRecovered(SchedulerComponents.Watchdog);
+        }
+        else
+        {
+            lifecycle.MarkDegraded(
+                SchedulerComponents.Watchdog,
+                "the watchdog is not answering; every scheduled restart will fail, and the only "
+                + "evidence would otherwise be a server that never went down");
+        }
     }
 
     private Task TickAsync(CancellationToken ct)
     {
         var all = instances.GetAll();
-        if (all is null) return Task.CompletedTask;
+
+        if (all is null)
+        {
+            // Not an empty host. The engine could not be read at all, which is indistinguishable from
+            // "nobody has configured a schedule" everywhere else, including this daemon's own status
+            // socket.
+            lifecycle.MarkDegraded(
+                SchedulerComponents.Kgsm,
+                "could not read the instance list from kgsm; this daemon knows of no schedules, which "
+                + "looks exactly like a host that has none");
+
+            return Task.CompletedTask;
+        }
+
+        lifecycle.MarkRecovered(SchedulerComponents.Kgsm);
 
         var now = DateTime.UtcNow;
         var statuses = new List<SchedulerInstanceStatus>(all.Count);
