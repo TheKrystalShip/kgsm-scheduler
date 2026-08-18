@@ -4,6 +4,16 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — a scheduled backup says a cadence took it
+
+`FireBackupAsync` states `reason: scheduled` on the backup it takes (kgsm-lib 4.40.0). The engine
+writes it into the manifest as a fact, and it is what tells a nightly archive apart from one a person
+asked for — an unstated reason is recorded as an ad-hoc request, which is what this is not.
+
+The prune that follows is unchanged and now keeps the retention count in *prunable* backups: the
+engine skips pinned ones without counting them, so an operator protecting an archive never shrinks
+the window this schedule maintains.
+
 ### Fixed — a first setup on a host where nothing is installed yet completes
 
 `deploy/setup.sh` enables its unit at boot and starts it only when something exists at the unit's

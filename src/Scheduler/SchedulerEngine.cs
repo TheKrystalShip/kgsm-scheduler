@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheKrystalShip.KGSM.Core.Interfaces;
+using TheKrystalShip.KGSM.Core.Models;
 using TheKrystalShip.KGSM.Lifecycle;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
@@ -313,12 +314,23 @@ internal sealed class SchedulerEngine(
     /// it is: kgsm records what state the archive was captured in, so a backup no longer needs a
     /// stopped server — or a restart window to happen in.
     /// </summary>
+    /// <remarks>
+    /// The backup states that a cadence took it. Nothing downstream could otherwise tell a nightly
+    /// archive from one a person asked for, and the engine will not guess: an unstated reason is
+    /// recorded as an ad-hoc request, which is what this is not.
+    /// <para>
+    /// The prune keeps <paramref name="retention"/> <b>prunable</b> backups. Pinned ones are skipped
+    /// and do not consume a slot, so an operator protecting an archive never shrinks the window this
+    /// schedule maintains.
+    /// </para>
+    /// </remarks>
     private async Task FireBackupAsync(string name, int retention, CancellationToken ct)
     {
         logger.LogInformation("{Instance}: creating scheduled backup", name);
 
         var result = await Task
-            .Run(() => instances.CreateBackup(name, actor: "system:scheduler", origin: "system"), ct)
+            .Run(() => instances.CreateBackup(name, actor: "system:scheduler", origin: "system",
+                reason: BackupReason.Scheduled), ct)
             .ConfigureAwait(false);
 
         bool ok = result.ExitCode == 0;
