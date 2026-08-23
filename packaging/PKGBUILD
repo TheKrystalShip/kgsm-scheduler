@@ -11,7 +11,7 @@
 # packaging time is a unit nobody tested.
 
 pkgname=kgsm-scheduler
-pkgver=2.5.0
+pkgver=2.10.0
 pkgrel=1
 pkgdesc="KGSM scheduler — scheduled restarts, backups and update sweeps"
 arch=('x86_64')
@@ -20,8 +20,11 @@ license=('GPL-3.0-or-later')
 groups=('kgsm-node')
 # No separate debug package: these are shipped to a private fleet, not a distro archive.
 options=('!debug')
-depends=('kgsm' 'kgsm-watchdog' 'systemd' 'glibc')
+# kgsm-base carries the kgsm service account this unit runs as, the /var/lib/kgsm tree it writes its
+# descriptor and command manifest into, and the preset policy deciding whether it runs here.
+depends=('kgsm-base' 'kgsm' 'kgsm-watchdog' 'systemd' 'glibc')
 backup=('etc/kgsm-scheduler/kgsm-scheduler.env')
+install="${pkgname}.install"
 
 _stage() { printf '%s' "${KGSM_STAGE:-${startdir}/../artifacts/publish}"; }
 
@@ -50,8 +53,6 @@ package() {
 
     install -Dm644 "${repo}/deploy/kgsm-scheduler.service" \
         "${pkgdir}/usr/lib/systemd/system/kgsm-scheduler.service"
-    install -Dm644 "${repo}/deploy/sysusers.d/kgsm-scheduler.conf" \
-        "${pkgdir}/usr/lib/sysusers.d/kgsm-scheduler.conf"
 
     # Seeded from the committed example and listed in backup=(), so an upgrade writes .pacnew beside
     # a file you edited rather than over it. Secrets are set here and ship in no package.

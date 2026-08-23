@@ -1,0 +1,28 @@
+# The preset policy in kgsm-base decides whether the scheduler runs on a node; applying it is
+# symlink manipulation on disk, so it works during the transaction and in a chroot alike. Starting
+# it is the node's post-transaction hook's job, which is where a running system is available.
+#
+# post_install only. An administrator who disabled this unit keeps it disabled across every later
+# version — re-presetting on upgrade would quietly undo that.
+
+post_install() {
+    systemctl preset kgsm-scheduler.service >/dev/null 2>&1 || true
+
+    cat <<'MSG'
+
+  kgsm-scheduler needs no configuration: /etc/kgsm-scheduler/kgsm-scheduler.env holds overrides only.
+
+  What it fires comes from each instance's own kgsm config — scheduled restarts, scheduled backups
+  and the update sweep — so a host with nothing scheduled runs it and it does nothing.
+
+MSG
+}
+
+post_upgrade() {
+    cat <<'MSG'
+
+  If pacman wrote a .pacnew beside /etc/kgsm-scheduler/kgsm-scheduler.env, merge it — new settings
+  are declared there and a key the file never declares binds to nothing.
+
+MSG
+}

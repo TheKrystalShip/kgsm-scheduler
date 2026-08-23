@@ -4,6 +4,17 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — a packaged install enables and starts the scheduler (`2.10.0`)
+
+`packaging/kgsm-scheduler.install` applies kgsm-base's `50-kgsm.preset` to this project's units in
+`post_install`, so a node comes up with them enabled instead of needing a person to enable each one.
+The node's post-transaction hook starts what is enabled, stopped and configured. `post_upgrade` does
+not preset: an administrator's `disable` survives every later version.
+
+`depends=('kgsm-base')`, which carries the `kgsm` account this unit runs as and the `/var/lib/kgsm`
+tree it writes its descriptor and command manifest into — so this package no longer ships
+`/usr/lib/sysusers.d/kgsm-scheduler.conf`, and `deploy/sysusers.d/` is gone.
+
 ## [2.9.1] - 2026-08-23
 
 ### Fixed — a packaged node lists this leaf's commands
