@@ -4,6 +4,15 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+## [2.9.1] - 2026-08-23
+
+### Fixed — a packaged node lists this leaf's commands
+
+`packaging/PKGBUILD` installs `deploy/kgsm-scheduler.commands.json` as
+`/var/lib/kgsm/leaves/commands/scheduler.json`, the path `deploy.sh` writes on a development host and
+the one kgsm-api reads to render this leaf's **Commands** tab. It is a subdirectory because the
+descriptor scan globs `*.json` at the level above and reads anything there as a leaf descriptor.
+
 ## [2.9.0] - 2026-08-18
 
 ### Added — every journal line now carries its own id
