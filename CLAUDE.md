@@ -159,7 +159,7 @@ signature matches, and a postponement does not change the signature.
 
 ⚠ **The daemon enforces no authorization here, and the shipped command manifest says so** (`gates`
 bucket `none`). A unix socket carries no identity; the only restriction is the filesystem permission
-on the socket, which is the same posture the status socket has always had. A caller that wants a
+on the socket — the same posture as the status socket. A caller that wants a
 tier check owes it itself — `kgsm-api` gates its Postpone button at operator before it dials this.
 
 **A postponement does not survive a restart of this daemon.** The standing target lives in the
@@ -194,6 +194,12 @@ history; never duplicate it into docs or code.
   survive it: *"temporary shim for the rework"*, *"added to satisfy the new requirement"*,
   milestone/phase labels (*"per M2"*, *"the Phase 1 step"*). If a line's justification is the work
   that produced it rather than the system as it now stands, it goes.
+- **No volatile numbers.** Counts and versions that drift — how many projects/files/tests/
+  partials exist, a dependency's pinned version, a file's line count — never go in prose: they are
+  stale the moment anything changes, and nothing fails to remind anyone. Name the authoritative
+  source instead (the csproj, the directory, the barrel file). A number belongs in prose only when
+  it *is* the contract (a port, a timeout, a cap) or a measured fact that is itself the reason a
+  design exists.
 - **Edits are replacements, not appends.** When changing an existing feature, rewrite the affected
   doc/comment fresh as if writing it for the first time — never append a correction under the
   stale version, and never leave the stale version standing beside the new. The current revision
