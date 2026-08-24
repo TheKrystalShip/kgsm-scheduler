@@ -13,9 +13,10 @@ watchdog), never on `kgsm-api` or a sibling leaf. It runs fully standalone,
 co-located with a `kgsm`. The API's use of it is optional/additive — it reads the
 status socket and degrades gracefully when the daemon is absent.
 
-Scheduled-restart / auto-backup ownership is the scheduler's; the **watchdog** still
-owns autostart + crash-restart + CPU/mem caps. See `tks/server-settings-plan.md` and
-`system-architecture.md`.
+Scheduled-restart / auto-backup ownership is the scheduler's; the **watchdog**
+owns autostart + crash-restart + CPU/mem caps. The per-instance config keys the
+scheduler reads are documented in `CONFIGURATION.md`; ecosystem topology is
+`tks/system-architecture.md`.
 
 ## Key files
 
