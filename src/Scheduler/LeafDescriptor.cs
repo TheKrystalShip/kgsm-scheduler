@@ -9,13 +9,14 @@ using TheKrystalShip.KGSM.LeafConfig;
     id: "scheduler",
     displayName: "Scheduler",
     unit: "kgsm-scheduler.service",
-    role: "Fires each server's scheduled restarts and backups at wall-clock time through the watchdog, "
-        + "and sweeps the roster for newer game builds.")]
+    role: "Runs each server's maintenance windows — backups and restarts, in order, announced and "
+        + "exclusive — and sweeps the roster for newer game builds.")]
 
 [assembly: LeafGroup("general", "General", 1)]
 [assembly: LeafGroup("wiring", "Connections", 2)]
 [assembly: LeafGroup("timing", "Timing", 3)]
-[assembly: LeafGroup("updates", "Game updates", 4)]
+[assembly: LeafGroup("policy", "Host policy", 4)]
+[assembly: LeafGroup("updates", "Game updates", 5)]
 
 // Lowest precedence first — the same order the daemon resolves them in.
 [assembly: LeafFloorSource("appsettings", "/opt/kgsm-scheduler/kgsm-scheduler.settings.json")]

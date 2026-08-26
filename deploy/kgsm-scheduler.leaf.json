@@ -3,7 +3,7 @@
   "id": "scheduler",
   "displayName": "Scheduler",
   "unit": "kgsm-scheduler.service",
-  "role": "Fires each server's scheduled restarts and backups at wall-clock time through the watchdog, and sweeps the roster for newer game builds.",
+  "role": "Runs each server's maintenance windows — backups and restarts, in order, announced and exclusive — and sweeps the roster for newer game builds.",
   "onDemand": false,
   "applyMode": "restart",
   "floorSources": [
@@ -37,9 +37,14 @@
       "order": 3
     },
     {
+      "id": "policy",
+      "label": "Host policy",
+      "order": 4
+    },
+    {
       "id": "updates",
       "label": "Game updates",
-      "order": 4
+      "order": 5
     }
   ],
   "fields": [
@@ -129,12 +134,34 @@
       "key": "graceWindowMin",
       "env": "Scheduler__GraceWindowMinutes",
       "label": "Missed-fire grace window",
-      "description": "How late a missed restart may be and still run. Anything later is skipped, so a host that was down does not come back to a burst of catch-up restarts. Zero always runs missed restarts.",
+      "description": "How late a missed maintenance window may be and still run. Anything later is skipped, so a host that was down does not come back to a burst of catch-up work. A window that comes round more often than twice this gets half its own period instead, so a frequent window can never have two occurrences owed at once.",
       "group": "timing",
       "type": "int",
       "default": "10",
       "min": 0,
       "unit": "min",
+      "risk": "safe"
+    },
+    {
+      "key": "minWindowPeriodMin",
+      "env": "Scheduler__MinimumWindowPeriodMinutes",
+      "label": "Minimum window period",
+      "description": "How often maintenance is allowed to happen at all on this host. A window asking to run more frequently than this is reported as one that will not fire, rather than firing anyway — the floor is the host's answer, not the server's.",
+      "group": "policy",
+      "type": "int",
+      "default": "10",
+      "min": 10,
+      "unit": "min",
+      "risk": "safe"
+    },
+    {
+      "key": "allowDisruptiveTasks",
+      "env": "Scheduler__AllowDisruptiveTasks",
+      "label": "Allow disruptive maintenance",
+      "description": "Whether maintenance that interrupts the people on a server — a restart, or an update — may run on this host at all. Off leaves backups running as normal; anything disruptive is recorded as skipped and the windows carrying it are not announced, since there would be nothing true to announce.",
+      "group": "policy",
+      "type": "bool",
+      "default": "true",
       "risk": "safe"
     },
     {

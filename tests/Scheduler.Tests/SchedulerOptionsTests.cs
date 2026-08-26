@@ -33,6 +33,29 @@ public class SchedulerOptionsTests
         Assert.True(o.UpdateCheckEnabled);
         Assert.Equal(60, o.UpdateCheckIntervalMinutes);
         Assert.Equal(5, o.UpdateCheckStaggerSeconds);
+        Assert.Equal(10, o.MinimumWindowPeriodMinutes);
+        Assert.True(o.AllowDisruptiveTasks);
+    }
+
+    // The host floor cannot undercut the grammar's own: a policy permitting something the parser
+    // refuses would be a knob that reads as applied while changing nothing.
+    [Theory]
+    [InlineData("0", SchedulerOptions.MinWindowPeriodMinutes)]
+    [InlineData("-1", SchedulerOptions.MinWindowPeriodMinutes)]
+    [InlineData("5", SchedulerOptions.MinWindowPeriodMinutes)]
+    [InlineData("60", 60)]
+    public void The_minimum_window_period_is_raised_to_its_floor(string written, int expected)
+    {
+        Assert.Equal(expected,
+            Bind((nameof(SchedulerSettings.MinimumWindowPeriodMinutes), written)).MinimumWindowPeriodMinutes);
+    }
+
+    // A host that wants nothing interrupting its players has to be able to say so, and the daemon
+    // then records every disruptive task as skipped rather than pretending it ran.
+    [Fact]
+    public void Disruptive_maintenance_can_be_refused_host_wide()
+    {
+        Assert.False(Bind((nameof(SchedulerSettings.AllowDisruptiveTasks), "false")).AllowDisruptiveTasks);
     }
 
     // Off has to be reachable and unambiguous: it means nothing on this host asks upstream, so no
@@ -111,7 +134,9 @@ public class SchedulerOptionsTests
             (nameof(SchedulerSettings.GraceWindowMinutes), ""),
             (nameof(SchedulerSettings.UpdateCheckEnabled), ""),
             (nameof(SchedulerSettings.UpdateCheckIntervalMinutes), ""),
-            (nameof(SchedulerSettings.UpdateCheckStaggerSeconds), ""));
+            (nameof(SchedulerSettings.UpdateCheckStaggerSeconds), ""),
+            (nameof(SchedulerSettings.MinimumWindowPeriodMinutes), ""),
+            (nameof(SchedulerSettings.AllowDisruptiveTasks), ""));
 
         Assert.Equal(60, o.PollIntervalSeconds);
         Assert.Equal(10, o.GraceWindowMinutes);
@@ -120,6 +145,10 @@ public class SchedulerOptionsTests
         Assert.True(o.UpdateCheckEnabled);
         Assert.Equal(60, o.UpdateCheckIntervalMinutes);
         Assert.Equal(5, o.UpdateCheckStaggerSeconds);
+        Assert.Equal(10, o.MinimumWindowPeriodMinutes);
+        // Blank must not read as "no disruptive maintenance" — a stray line in an env file would
+        // silently stop every restart on this host, and nothing would say so.
+        Assert.True(o.AllowDisruptiveTasks);
     }
 
     // The other half of the contract: a value that is present but is not a number is NOT quietly

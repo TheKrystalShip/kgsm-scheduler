@@ -74,6 +74,14 @@ internal sealed class Program
             clock: null,
             startedAt: () => startedAt));
 
+        // Every task this daemon can run, and the pieces the window run is assembled from. A task is
+        // stateless, so one instance of each serves the whole host.
+        builder.Services.AddSingleton<IMaintenanceTask, BackupTask>();
+        builder.Services.AddSingleton<IMaintenanceTask, RestartTask>();
+        builder.Services.AddSingleton<MaintenanceTaskCatalog>();
+        builder.Services.AddSingleton<WindowAnnouncer>();
+        builder.Services.AddSingleton<MaintenanceRunner>();
+
         builder.Services.AddHostedService<SchedulerEngine>();
         builder.Services.AddHostedService<UpdateCheckSweep>();
         builder.Services.AddHostedService<StatusSocketServer>();

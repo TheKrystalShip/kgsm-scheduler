@@ -5,16 +5,18 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheKrystalShip.Kgsm.Scheduler.Json;
+using TheKrystalShip.KGSM.Core.Scheduling;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
 /// <summary>One instruction to the scheduler: a verb, what it acts on, and however much it needs.</summary>
-/// <param name="Command">The verb. Only <c>postpone</c> exists.</param>
-/// <param name="Instance">The server whose schedule it acts on.</param>
-/// <param name="Minutes">How far to push the next fire back.</param>
-internal sealed record ControlRequest(string? Command, string? Instance, int? Minutes);
+/// <param name="Command"><c>postpone</c>, <c>skip</c> or <c>run-now</c>.</param>
+/// <param name="Instance">The server whose window it acts on.</param>
+/// <param name="Window">The window's id — its schedule expression, e.g. <c>weekly.sun@04:00</c>.</param>
+/// <param name="Minutes">How far <c>postpone</c> pushes the next fire back.</param>
+internal sealed record ControlRequest(string? Command, string? Instance, string? Window, int? Minutes);
 
-/// <summary>What came of it. <see cref="NextFireUtc"/> is the schedule as it now stands, so a caller
+/// <summary>What came of it. <see cref="NextFireUtc"/> is the window as it now stands, so a caller
 /// never has to ask again to find out what it just did.</summary>
 internal sealed record ControlResponse(bool Ok, string Message, DateTimeOffset? NextFireUtc = null);
 
@@ -35,9 +37,16 @@ internal sealed record ControlResponse(bool Ok, string Message, DateTimeOffset? 
 /// is one caller among possible others.
 /// </para>
 /// <para>
-/// <b>Postponing moves the standing target, it does not edit the schedule.</b> The instance's
-/// configuration is untouched, so the fire after this one lands where it always would have. That is what
-/// makes it a postponement rather than a schedule change, and it is why it needs nothing from kgsm.
+/// <b>Every verb moves a standing target; none edits a schedule.</b> The instance's configuration is
+/// untouched, so the fire after the one acted on lands exactly where it always would have. That is what
+/// makes these "not tonight" and "just this once" rather than reschedules, and it is why they need
+/// nothing from kgsm. It also means none of them survives a restart of this daemon: the standing target
+/// lives in memory, and a restart recomputes it from the instance's own config.
+/// </para>
+/// <para>
+/// <b>A verb names its window.</b> One instance can hold several appointments, and moving the wrong one
+/// is worse than refusing — so an instruction that does not name a window is refused with the ids that
+/// were available to name.
 /// </para>
 /// </remarks>
 internal sealed class ControlSocketServer(
@@ -119,40 +128,94 @@ internal sealed class ControlSocketServer(
         return request.Command switch
         {
             "postpone" => Postpone(request),
+            "skip" => Skip(request),
+            "run-now" => RunNow(request),
             null or "" => new ControlResponse(false, "no command given"),
             _ => new ControlResponse(false, $"unknown command '{request.Command}'"),
         };
     }
 
+    /// <summary>Pushes one window's next fire back, leaving the one after it where it was.</summary>
     private ControlResponse Postpone(ControlRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Instance))
-            return new ControlResponse(false, "no instance named");
-
         int minutes = request.Minutes ?? 60;
         if (minutes <= 0 || minutes > MaxMinutes)
             return new ControlResponse(false, $"minutes must be between 1 and {MaxMinutes}");
 
-        // Read-modify-write under the registry's lock, so a tick landing in the middle cannot overwrite
-        // the new target with the one it read a moment ago.
-        DateTime? moved = null;
-        bool hadPlan = false;
+        return Move(request, "postponed",
+            w => w.Plan.NextUtc is { } next ? next.AddMinutes(minutes) : null,
+            $"postponed {minutes} minute(s)");
+    }
 
-        registry.Update(request.Instance, state =>
+    /// <summary>
+    /// Drops this one occurrence: the target moves to the fire after it, and nothing runs in between.
+    /// </summary>
+    private ControlResponse Skip(ControlRequest request) =>
+        Move(request, "skipped", w =>
+            w.Plan.NextUtc is { } next ? ScheduleClock.NextFire(w.Window, w.Timezone, next) : null,
+            "this occurrence is skipped");
+
+    /// <summary>
+    /// Brings the window forward to now, so the next poll opens it.
+    /// </summary>
+    /// <remarks>
+    /// The target is moved rather than the run being started here, so the window goes through exactly
+    /// the sequence a scheduled one does — the same busy-slot claim, the same gates, the same record.
+    /// A second path into a run would be a second set of rules about when one is allowed to happen.
+    /// </remarks>
+    private ControlResponse RunNow(ControlRequest request) =>
+        Move(request, "brought forward", _ => DateTime.UtcNow, "the window opens at the next poll");
+
+    /// <summary>
+    /// Names the window, moves its standing target under the registry's lock, and says what it did.
+    /// </summary>
+    /// <remarks>
+    /// Read-modify-write under the lock, so a tick landing in the middle cannot overwrite the new
+    /// target with the one it read a moment ago. The signature is untouched, so the next tick keeps
+    /// this target rather than recomputing one — a move a re-plan discarded a minute later would be
+    /// no move at all.
+    /// </remarks>
+    private ControlResponse Move(
+        ControlRequest request,
+        string verb,
+        Func<WindowState, DateTime?> target,
+        string success)
+    {
+        if (string.IsNullOrWhiteSpace(request.Instance))
+            return new ControlResponse(false, "no instance named");
+
+        ScheduleState? state = registry.Get(request.Instance);
+        if (state is null || state.Windows.Count == 0)
+            return new ControlResponse(false, $"{request.Instance} has no maintenance windows");
+
+        if (string.IsNullOrWhiteSpace(request.Window))
+            return new ControlResponse(false,
+                $"no window named; {request.Instance} has {Available(state)}");
+
+        string windowId = request.Window.Trim();
+        if (!state.Windows.ContainsKey(windowId))
+            return new ControlResponse(false,
+                $"{request.Instance} has no window '{windowId}'; it has {Available(state)}");
+
+        DateTime? moved = null;
+
+        registry.UpdateWindow(request.Instance, windowId, w =>
         {
-            if (state.Restart is not { NextUtc: { } next } plan) return state;
-            hadPlan = true;
-            moved = next.AddMinutes(minutes);
-            return state with { Restart = plan with { NextUtc = moved } };
+            if (w.Plan.NextUtc is null) return w;
+            moved = target(w);
+            return moved is null ? w : w with { Plan = w.Plan with { NextUtc = moved } };
         });
 
-        if (!hadPlan)
-            return new ControlResponse(false, $"{request.Instance} has no scheduled restart to postpone");
+        if (moved is null)
+            return new ControlResponse(false,
+                $"{request.Instance}'s '{windowId}' has no next fire to move");
 
-        logger.LogInformation("{Instance}: scheduled restart postponed {Minutes}min → {Next:o}",
-            request.Instance, minutes, moved);
+        logger.LogInformation("{Instance}: {Window} {Verb} → {Next:o}",
+            request.Instance, windowId, verb, moved);
 
-        return new ControlResponse(true, $"postponed {minutes} minute(s)",
-            new DateTimeOffset(moved!.Value, TimeSpan.Zero));
+        return new ControlResponse(true, success, new DateTimeOffset(moved.Value, TimeSpan.Zero));
     }
+
+    private static string Available(ScheduleState state) =>
+        string.Join(", ", state.Windows.Keys.Select(k => $"'{k}'"));
 }

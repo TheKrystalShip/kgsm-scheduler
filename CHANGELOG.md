@@ -4,6 +4,52 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — maintenance windows replace the two per-instance cadences (`3.0.0`)
+
+**Breaking: the status socket's shape changes.** One nested run record per window replaces the
+parallel `last*` triples, so a consumer reading `scheduledRestart` / `nextFireUtc` / `lastRunOk`
+reads `windows[]` instead.
+
+An instance now declares a list of **maintenance windows** in one kgsm config key,
+`maintenance_windows` — each an appointment plus an ordered set of tasks:
+
+```
+maintenance_windows="daily@05:00/backup;weekly.sun@04:00/backup,restart"
+```
+
+- **Tasks run in canonical order and a failure aborts the rest.** `backup` → `restart`, whatever
+  order they were written in; the remainder are recorded `aborted`. A partially-run window is worse
+  than a skipped one.
+- **A record belongs to the window that ran.** Windows are independent appointments that happen to
+  touch the same server, so a backup that fails is written against the window that asked for it and
+  nowhere else — including a window that finds the instance busy, which is recorded `skipped` on
+  itself.
+- **Four outcomes, per task and per window** — `ok`, `failed`, `skipped`, `aborted` — which is what
+  makes "which part failed" answerable.
+- **Announcements are per window** and carry a `{reason}` token beside `{minutes}` and `{instance}`,
+  through `announce_maintenance_message`. A window with nothing disruptive in it is never announced.
+  ⚠ A lead at or above a window's own period is dropped, and the drop is reported: on a ten-minute
+  window a fifteen-minute warning would be spoken nine minutes before the fire it describes.
+- **Grace is relative to the window**, capped at half its period and floored at one poll, so a
+  frequent window can never have two occurrences owed at once.
+- **The control socket is per window.** `postpone`, `skip` and `run-now` each take a `window` id —
+  the window's schedule expression. An instruction naming none is refused with the ids it could have
+  named.
+- **A window this host will not fire says so where it is read.** An expression that does not parse, a
+  period under the host floor, or a task this daemon does not run appears in the snapshot as
+  `valid: false` with its error and a null `nextFireUtc` — and degrades the leaf's new `config`
+  component, so the leaf's own health states that there is maintenance here which is never going to
+  happen. What one *instance* cannot run is the task gate's answer instead: a container's `restart`
+  is declined with that reason while the `backup` beside it in the same window still fires.
+
+### Added — host policy for how often and whether maintenance runs (`3.0.0`)
+
+- `Scheduler__MinimumWindowPeriodMinutes` (default `10`) — the shortest period this host permits a
+  window to have.
+- `Scheduler__AllowDisruptiveTasks` (default `true`) — whether maintenance that interrupts the people
+  on a server may run here at all. Off leaves backups running and records every disruptive task as
+  skipped with that reason.
+
 ### Added — a server tells the people on it that a restart is coming
 
 At each lead time an instance declares (`announce_lead_minutes`, e.g. `15,5,1`), the scheduler

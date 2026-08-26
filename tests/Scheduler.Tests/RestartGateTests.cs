@@ -1,11 +1,10 @@
-using TheKrystalShip.KGSM.Core.Interfaces;
 using TheKrystalShip.KGSM.Core.Models;
 using TheKrystalShip.KGSM.Core.Models.Enums;
 
 namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 
 /// <summary>
-/// What the clock is allowed to act on. The gate stands between a schedule coming due and the
+/// What the clock is allowed to act on. The gate stands between a window coming due and the
 /// watchdog being told to restart something, and the whole of its job is refusing to act on an
 /// instance whose state does not warrant it — while keeping the reason it refused distinguishable
 /// from every other reason.
@@ -24,7 +23,7 @@ public class RestartGateTests
             Reason = reason,
         };
 
-    private static Task<RestartGateDecision> Evaluate(
+    private static Task<TaskGate> Evaluate(
         WatchdogClientStub watchdog, InstanceRuntime? runtime = InstanceRuntime.Native) =>
         RestartGate.EvaluateAsync(watchdog, "factorio-01", runtime, CancellationToken.None);
 
@@ -35,7 +34,7 @@ public class RestartGateTests
     {
         var decision = await Evaluate(WatchdogClientStub.Answering(State("running")));
 
-        Assert.Equal(RestartGateOutcome.Dispatch, decision.Outcome);
+        Assert.Equal(TaskGateOutcome.Dispatch, decision.Outcome);
     }
 
     // ---- what it abandons --------------------------------------------------
@@ -49,7 +48,7 @@ public class RestartGateTests
         var decision = await Evaluate(WatchdogClientStub.Answering(
             State("failed", populated: false, restarts: 5, reason: "crashed (exit 139)")));
 
-        Assert.Equal(RestartGateOutcome.NotApplicable, decision.Outcome);
+        Assert.Equal(TaskGateOutcome.Skip, decision.Outcome);
         Assert.Contains("gave up", decision.Message);
         Assert.Contains("5 failed restart(s)", decision.Message);
         Assert.Contains("crashed (exit 139)", decision.Message);
@@ -62,7 +61,7 @@ public class RestartGateTests
     {
         var decision = await Evaluate(WatchdogClientStub.Answering(null));
 
-        Assert.Equal(RestartGateOutcome.NotApplicable, decision.Outcome);
+        Assert.Equal(TaskGateOutcome.Skip, decision.Outcome);
         Assert.Contains("not supervising", decision.Message);
     }
 
@@ -76,7 +75,7 @@ public class RestartGateTests
     {
         var decision = await Evaluate(WatchdogClientStub.Answering(State(phase)));
 
-        Assert.Equal(RestartGateOutcome.NotApplicable, decision.Outcome);
+        Assert.Equal(TaskGateOutcome.Skip, decision.Outcome);
         Assert.Contains(phase, decision.Message);
     }
 
@@ -87,7 +86,7 @@ public class RestartGateTests
     {
         var decision = await Evaluate(WatchdogClientStub.Answering(State("running", populated: false)));
 
-        Assert.Equal(RestartGateOutcome.NotApplicable, decision.Outcome);
+        Assert.Equal(TaskGateOutcome.Skip, decision.Outcome);
         Assert.Contains("cgroup is empty", decision.Message);
     }
 
@@ -98,7 +97,7 @@ public class RestartGateTests
     {
         var decision = await Evaluate(WatchdogClientStub.Unreachable());
 
-        Assert.Equal(RestartGateOutcome.Blocked, decision.Outcome);
+        Assert.Equal(TaskGateOutcome.Fail, decision.Outcome);
         Assert.Contains("did not answer", decision.Message);
         Assert.Contains("unknown", decision.Message);
         // The one thing it must never say: that the instance is not running. Nothing measured it.
@@ -124,19 +123,19 @@ public class RestartGateTests
     // apply is not: the clock came round for a server that is deliberately down, and declining is
     // the right outcome — recorded, with its reason, and not as a red row.
     [Fact]
-    public async Task An_owed_restart_records_a_failure_and_an_inapplicable_one_does_not()
+    public async Task An_owed_restart_fails_and_an_inapplicable_one_skips()
     {
         var blocked = await Evaluate(WatchdogClientStub.Unreachable());
         var notApplicable = await Evaluate(WatchdogClientStub.Answering(null));
 
-        Assert.False(blocked.LastRunOk);
-        Assert.Null(notApplicable.LastRunOk);
+        Assert.Equal(TaskGateOutcome.Fail, blocked.Outcome);
+        Assert.Equal(TaskGateOutcome.Skip, notApplicable.Outcome);
     }
 
     // ---- runtimes the watchdog does not supervise --------------------------
 
     // The watchdog answers 404 for a container exactly as it does for a stopped native instance, so
-    // a schedule that can never be honoured would otherwise report itself as a server that happened
+    // a restart that can never be honoured would otherwise report itself as a server that happened
     // to be down.
     [Fact]
     public async Task A_container_instance_is_reported_as_out_of_the_watchdogs_scope()
@@ -145,9 +144,10 @@ public class RestartGateTests
 
         var decision = await Evaluate(watchdog, InstanceRuntime.Container);
 
-        Assert.Equal(RestartGateOutcome.Blocked, decision.Outcome);
+        // Declined, not failed: nothing was owed, and the rest of the window still runs — which is
+        // what keeps a container's nightly archive from being lost to the restart beside it.
+        Assert.Equal(TaskGateOutcome.Skip, decision.Outcome);
         Assert.Contains("container instance", decision.Message);
-        Assert.False(decision.LastRunOk);
         // Decided from the runtime alone; the socket is never dialed for one.
         Assert.Equal(0, watchdog.StatusCalls);
     }
@@ -161,66 +161,8 @@ public class RestartGateTests
         var running = WatchdogClientStub.Answering(State("running"));
         var absent = WatchdogClientStub.Answering(null);
 
-        Assert.Equal(RestartGateOutcome.Dispatch, (await Evaluate(running, runtime: null)).Outcome);
-        Assert.Equal(RestartGateOutcome.NotApplicable, (await Evaluate(absent, runtime: null)).Outcome);
+        Assert.Equal(TaskGateOutcome.Dispatch, (await Evaluate(running, runtime: null)).Outcome);
+        Assert.Equal(TaskGateOutcome.Skip, (await Evaluate(absent, runtime: null)).Outcome);
         Assert.Equal(1, running.StatusCalls);
     }
-}
-
-/// <summary>
-/// A watchdog that answers with one prepared state, or refuses to answer at all. Only the status
-/// read is exercised by the gate; every other verb throws rather than pretending to a result.
-/// </summary>
-internal sealed class WatchdogClientStub : IWatchdogClient
-{
-    private readonly WatchdogInstanceState? _state;
-    private readonly bool _reachable;
-
-    private WatchdogClientStub(WatchdogInstanceState? state, bool reachable)
-    {
-        _state = state;
-        _reachable = reachable;
-    }
-
-    public static WatchdogClientStub Answering(WatchdogInstanceState? state) => new(state, reachable: true);
-
-    public static WatchdogClientStub Unreachable() => new(null, reachable: false);
-
-    /// <summary>How many times the gate asked for a state — a container never gets that far.</summary>
-    public int StatusCalls { get; private set; }
-
-    public Task<WatchdogInstanceState?> GetStatusAsync(string instanceName, CancellationToken cancellationToken = default)
-    {
-        StatusCalls++;
-
-        if (!_reachable)
-            throw new HttpRequestException("Connection refused (/run/kgsm-watchdog/control.sock)");
-
-        return Task.FromResult(_state);
-    }
-
-    public void Dispose() { }
-
-    private static T Unused<T>() => throw new NotSupportedException("not exercised by the gate");
-
-    public Task<bool> IsReadyAsync(CancellationToken cancellationToken = default) => Unused<Task<bool>>();
-    public Task<WatchdogReadyState?> GetReadyAsync(CancellationToken cancellationToken = default) => Unused<Task<WatchdogReadyState?>>();
-    public Task<WatchdogActionResult> StartAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<WatchdogActionResult> StopAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<WatchdogActionResult> EnableAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<WatchdogActionResult> DisableAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<IReadOnlyList<string>> GetEnabledNamesAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<string>>>();
-    public Task<WatchdogActionResult> ForgetAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<WatchdogActionResult> SetCpuPriorityAsync(string instanceName, string priority, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<WatchdogActionResult> RestartAsync(string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<IReadOnlyList<WatchdogInstanceState>> ListAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<WatchdogInstanceState>>>();
-    public Task<IReadOnlyList<WatchdogRunTimes>> GetRunTimesAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<WatchdogRunTimes>>>();
-    public IAsyncEnumerable<string> FollowConsoleAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<IAsyncEnumerable<string>>();
-    public Task<IReadOnlyList<string>> GetConsoleTailAsync(string instanceName, int lines, CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<string>>>();
-    public Task<IReadOnlyList<WatchdogConsoleRun>> GetConsoleRunsAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<WatchdogConsoleRun>>>();
-    public Task<IReadOnlyList<string>> GetConsoleRunTailAsync(string instanceName, int lines, int run, CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<string>>>();
-    public Task<WatchdogConsoleWindow> GetConsoleWindowAsync(string instanceName, int lines, int run, long endOffset, CancellationToken cancellationToken = default) => Unused<Task<WatchdogConsoleWindow>>();
-    public Task<WatchdogConsoleDownload?> OpenConsoleDownloadAsync(string instanceName, int run, CancellationToken cancellationToken = default) => Unused<Task<WatchdogConsoleDownload?>>();
-    public Task<IReadOnlyDictionary<string, WatchdogInstancePresence>?> GetPlayerPresenceAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyDictionary<string, WatchdogInstancePresence>?>>();
-    public Task<WatchdogUpnpList?> GetUpnpAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<WatchdogUpnpList?>>();
 }

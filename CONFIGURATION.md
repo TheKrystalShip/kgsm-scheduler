@@ -30,7 +30,9 @@ Panel renders). A test fails the build if any of the three is missing one of the
 | `Scheduler:StatusSocketPath` | `Scheduler__StatusSocketPath` | `/run/kgsm-scheduler/status.sock` | Unix socket the schedule snapshot is served on, one NDJSON line per connection. `kgsm-api` reads it here for the `/settings` aggregation. The unit creates the parent directory (`RuntimeDirectory=kgsm-scheduler`). |
 | `Scheduler:ControlSocketPath` | `Scheduler__ControlSocketPath` | `/run/kgsm-scheduler/control.sock` | Unix socket the daemon takes instructions on, one NDJSON request and one reply per connection. Separate from the status socket, whose contract is that a client only ever reads. Same parent directory. |
 | `Scheduler:PollIntervalSeconds` | `Scheduler__PollIntervalSeconds` | `60` | How often each server's schedule is re-read from KGSM. Bounds how quickly a schedule change takes effect; does not affect the accuracy of a fire already scheduled. Anything below 5 is raised to 5. |
-| `Scheduler:GraceWindowMinutes` | `Scheduler__GraceWindowMinutes` | `10` | How late a missed restart may be and still run. Anything later is skipped, so a host that was down does not come back to a burst of catch-up restarts. Zero always runs missed restarts. |
+| `Scheduler:GraceWindowMinutes` | `Scheduler__GraceWindowMinutes` | `10` | How late a missed maintenance window may be and still run. Anything later is skipped, so a host that was down does not come back to a burst of catch-up work. Capped at half the window's own period, and floored at one poll interval — see below. |
+| `Scheduler:MinimumWindowPeriodMinutes` | `Scheduler__MinimumWindowPeriodMinutes` | `10` | The shortest period this host permits a maintenance window to have. A window asking to run more often is reported as one this host will not fire, with that reason. Anything below 10 is raised to 10 — the grammar's own floor, which a host policy cannot undercut. |
+| `Scheduler:AllowDisruptiveTasks` | `Scheduler__AllowDisruptiveTasks` | `true` | Whether maintenance that interrupts the people on a server may run on this host at all. False leaves backups running as normal; anything disruptive is recorded as skipped with that reason, and the windows carrying it are not announced. |
 | `Scheduler:UpdateCheckEnabled` | `Scheduler__UpdateCheckEnabled` | `true` | Whether to sweep every server for a newer game build. False means nothing on this host ever asks upstream, so no update is announced. |
 | `Scheduler:UpdateCheckIntervalMinutes` | `Scheduler__UpdateCheckIntervalMinutes` | `60` | How often the whole roster is swept. Each server asks its own upstream, so the cost is linear in servers. Anything below 5 is raised to 5. |
 | `Scheduler:UpdateCheckStaggerSeconds` | `Scheduler__UpdateCheckStaggerSeconds` | `5` | Pause between one server's check and the next. The sweep is serial by design; this spreads the requests out further. Zero checks back to back. |
@@ -39,12 +41,46 @@ Panel renders). A test fails the build if any of the three is missing one of the
 Out-of-range numbers are clamped and blank strings fall back to the coded default, so a hand-edited
 value degrades to something workable rather than taking the daemon down at startup.
 
+## Grace is relative to the window
+
+`GraceWindowMinutes` is one host-wide number, and a window's period runs from ten minutes to thirty
+days. The configured value is therefore **capped at half the window's own period** and **floored at
+one poll interval**:
+
+- **The cap.** A grace at or beyond a window's period would leave one occurrence still owed while the
+  next is already due — the catch-up burst the grace exists to prevent, arriving one fire at a time
+  and never emptying. Half the period is the widest grace under which at most one occurrence is ever
+  in flight. A host asking for ten minutes gets ten on a nightly window and five on a ten-minute one.
+- **The floor.** A target is reached between ticks and acted on at the next one, so a fire is at best
+  one poll late. A grace under that would drop every window on the host as missed, including one that
+  had just come due.
+
+## Per-instance configuration
+
+The knobs above are the **daemon's**. What each server does, and when, lives in that server's own
+kgsm config and is read fresh on every poll:
+
+| key | what |
+|---|---|
+| `maintenance_windows` | the windows themselves, packed — `daily@05:00/backup;weekly.sun@04:00/backup,restart` |
+| `timezone` | the IANA zone an appointment's time of day is read in. Intervals ignore it |
+| `backup_retention` | how many prunable archives a `backup` task keeps |
+| `announce_lead_minutes` | the lead times a window is announced at, e.g. `15,5,1` |
+| `announce_maintenance_message` | what is said, with `{instance}`, `{minutes}` and `{reason}` |
+| `announce_maintenance_cancelled_message` | what is said when an announced window does not happen |
+
+The grammar, and what makes a window valid, are `kgsm-lib`'s
+(`TheKrystalShip.KGSM.Core.Scheduling`). What *this host* additionally refuses — a period under its
+floor, a task it does not run, anything disruptive on a container instance — is in `CLAUDE.md`
+under **What this host will fire**.
+
 ## Example: env var override
 
 ```bash
 # /etc/kgsm-scheduler/kgsm-scheduler.env
 Scheduler__PollIntervalSeconds=30
 Scheduler__GraceWindowMinutes=5
+Scheduler__MinimumWindowPeriodMinutes=60
 ```
 
 `deploy/kgsm-scheduler.env.example` is the annotated version of the same file, with every knob and

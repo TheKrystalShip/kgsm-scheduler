@@ -37,9 +37,20 @@
     // Anything below 5 is raised to 5.
     "PollIntervalSeconds": 60,
 
-    // How late a missed restart may be and still run (minutes). Anything later is skipped, so a
-    // host that was down does not come back to a burst of catch-up restarts. Zero always runs them.
+    // How late a missed maintenance window may be and still run (minutes). Anything later is
+    // skipped, so a host that was down does not come back to a burst of catch-up work. Capped at
+    // half the window's own period, and floored at one poll interval.
     "GraceWindowMinutes": 10,
+
+    // The shortest period this host permits a maintenance window to have (minutes). A window asking
+    // to run more often is reported as one this host will not fire. Anything below 10 is raised
+    // to 10 — the grammar's own floor, which a host policy cannot undercut.
+    "MinimumWindowPeriodMinutes": 10,
+
+    // Whether maintenance that interrupts the people on a server — a restart, or an update — may run
+    // on this host at all. False leaves backups running as normal; anything disruptive is recorded
+    // as skipped, and the windows carrying it are not announced.
+    "AllowDisruptiveTasks": true,
 
     // Whether to sweep every server for a newer game build. False means nothing on this host ever
     // asks upstream, so no update is announced — servers keep running exactly as they are.

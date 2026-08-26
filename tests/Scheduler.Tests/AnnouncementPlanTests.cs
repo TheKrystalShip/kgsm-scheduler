@@ -1,9 +1,10 @@
 using TheKrystalShip.KGSM.Core.Models;
+using TheKrystalShip.KGSM.Core.Scheduling;
 
 namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 
 /// <summary>
-/// What a server says before a scheduled restart, and — mostly — what it declines to say.
+/// What a server says before a maintenance window, and — mostly — what it declines to say.
 /// </summary>
 public class AnnouncementPlanTests
 {
@@ -36,6 +37,61 @@ public class AnnouncementPlanTests
     public void ParseLeadMinutes_CollapsesDuplicates()
     {
         Assert.Equal([5], AnnouncementPlan.ParseLeadMinutes("5,5,5"));
+    }
+
+    // --- choosing the mark to speak -------------------------------------------------------
+
+    // --- leads a window is too frequent to honour ------------------------------------------
+
+    // ⚠ NextMark speaks the smallest due mark because marks come due in descending order — which
+    // holds only while the period exceeds the largest lead. On a ten-minute window the first tick
+    // after a fire already has 15 due, and the server would be told "in 15 minutes" nine minutes
+    // before it happens, every time.
+    [Fact]
+    public void ApplicableLeads_DropsLeadsAtOrBeyondTheWindowsOwnPeriod()
+    {
+        var kept = AnnouncementPlan.ApplicableLeads([15, 5, 1], TimeSpan.FromMinutes(10), out var dropped);
+
+        Assert.Equal([5, 1], kept);
+        Assert.Equal([15], dropped);
+    }
+
+    // Equal is not far enough: a fire exactly one period out is the previous fire, and the mark would
+    // come due the instant the countdown opened.
+    [Fact]
+    public void ApplicableLeads_TreatsALeadEqualToThePeriodAsTooLarge()
+    {
+        AnnouncementPlan.ApplicableLeads([10], TimeSpan.FromMinutes(10), out var dropped);
+
+        Assert.Equal([10], dropped);
+    }
+
+    [Fact]
+    public void ApplicableLeads_KeepsEveryLeadOnAWindowFarEnoughApart()
+    {
+        var kept = AnnouncementPlan.ApplicableLeads([15, 5, 1], TimeSpan.FromDays(1), out var dropped);
+
+        Assert.Equal([15, 5, 1], kept);
+        Assert.Empty(dropped);
+    }
+
+    // --- what the window is about to do ----------------------------------------------------
+
+    [Fact]
+    public void Reason_NamesWhatTheWindowDoes()
+    {
+        Assert.Equal("restarting", AnnouncementPlan.Reason([MaintenanceTask.Restart]));
+        // An update implies the restart that makes it the running build, so it is one sentence.
+        Assert.Equal("updating and restarting",
+            AnnouncementPlan.Reason([MaintenanceTask.Update, MaintenanceTask.Restart]));
+    }
+
+    // There is no true sentence to say about a nightly archive that interrupts nobody.
+    [Fact]
+    public void Reason_IsNothingForAWindowThatDisturbsNobody()
+    {
+        Assert.Null(AnnouncementPlan.Reason([MaintenanceTask.Backup]));
+        Assert.Null(AnnouncementPlan.Reason([]));
     }
 
     // --- choosing the mark to speak -------------------------------------------------------
@@ -100,6 +156,29 @@ public class AnnouncementPlanTests
     }
 
     [Fact]
+    public void Resolve_SubstitutesWhatTheWindowIsAboutToDo()
+    {
+        var instance = new Instance { Name = "mc-01", DisplayName = "Survival" };
+
+        Assert.Equal(
+            "Survival is updating and restarting in 5 min",
+            AnnouncementPlan.Resolve("{instance} is {reason} in {minutes} min", instance, 5,
+                "updating and restarting"));
+    }
+
+    // A cancellation describes no window's work, so a template carrying {reason} keeps it rather
+    // than being handed a phrase that would be a fabrication.
+    [Fact]
+    public void Resolve_LeavesTheReasonAloneWhenThereIsNoneToState()
+    {
+        var instance = new Instance { Name = "mc-01", DisplayName = "Survival" };
+
+        Assert.Equal(
+            "Survival: {reason} cancelled",
+            AnnouncementPlan.Resolve("{instance}: {reason} cancelled", instance, minutes: null));
+    }
+
+    [Fact]
     public void Resolve_LeavesTheLeadAloneWhenThereIsNoneToState()
     {
         // A cancellation describes no distance, so a template carrying {minutes} keeps it rather
@@ -130,7 +209,7 @@ public class AnnouncementPlanTests
         {
             BroadcastCommand = "say {message}",
             AnnounceLeadMinutes = "15,5",
-            AnnounceRestartMessage = "Restart in {minutes} min",
+            AnnounceMaintenanceMessage = "Restart in {minutes} min",
         }));
     }
 
@@ -143,7 +222,7 @@ public class AnnouncementPlanTests
         {
             BroadcastCommand = "",
             AnnounceLeadMinutes = "15,5",
-            AnnounceRestartMessage = "Restart in {minutes} min",
+            AnnounceMaintenanceMessage = "Restart in {minutes} min",
         }));
     }
 
@@ -155,7 +234,7 @@ public class AnnouncementPlanTests
         {
             BroadcastCommand = "say {message}",
             AnnounceLeadMinutes = "",
-            AnnounceRestartMessage = "Restart in {minutes} min",
+            AnnounceMaintenanceMessage = "Restart in {minutes} min",
         }));
     }
 
@@ -166,7 +245,7 @@ public class AnnouncementPlanTests
         {
             BroadcastCommand = "say {message}",
             AnnounceLeadMinutes = "15",
-            AnnounceRestartMessage = "   ",
+            AnnounceMaintenanceMessage = "   ",
         }));
     }
 }

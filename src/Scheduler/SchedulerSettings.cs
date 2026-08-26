@@ -78,12 +78,33 @@ internal sealed class SchedulerSettings
         Min = SchedulerOptions.MinPollIntervalSeconds, Unit = "s")]
     public int? PollIntervalSeconds { get; set; }
 
-    /// <summary>How late a missed restart may be and still run (minutes). Anything later is skipped.</summary>
-    /// <panel>How late a missed restart may be and still run. Anything later is skipped, so a host that
-    /// was down does not come back to a burst of catch-up restarts. Zero always runs missed
-    /// restarts.</panel>
+    /// <summary>How late a missed maintenance window may be and still run (minutes). Capped at half
+    /// the window's own period and floored at one poll.</summary>
+    /// <panel>How late a missed maintenance window may be and still run. Anything later is skipped, so a
+    /// host that was down does not come back to a burst of catch-up work. A window that comes round more
+    /// often than twice this gets half its own period instead, so a frequent window can never have two
+    /// occurrences owed at once.</panel>
     [LeafField("graceWindowMin", "Missed-fire grace window", Group = "timing", Min = 0, Unit = "min")]
     public int? GraceWindowMinutes { get; set; }
+
+    /// <summary>The shortest period this host permits a maintenance window to have (minutes). A window
+    /// that comes round more often is reported as one this host will not fire.</summary>
+    /// <panel>How often maintenance is allowed to happen at all on this host. A window asking to run more
+    /// frequently than this is reported as one that will not fire, rather than firing anyway — the floor
+    /// is the host's answer, not the server's.</panel>
+    [LeafField("minWindowPeriodMin", "Minimum window period", Group = "policy",
+        Min = SchedulerOptions.MinWindowPeriodMinutes, Unit = "min")]
+    public int? MinimumWindowPeriodMinutes { get; set; }
+
+    /// <summary>Whether maintenance that interrupts the people on a server may run on this host at
+    /// all.</summary>
+    /// <panel>Whether maintenance that interrupts the people on a server — a restart, or an update — may
+    /// run on this host at all. Off leaves backups running as normal; anything disruptive is recorded as
+    /// skipped and the windows carrying it are not announced, since there would be nothing true to
+    /// announce.</panel>
+    [LeafField("allowDisruptiveTasks", "Allow disruptive maintenance", Group = "policy",
+        Type = LeafType.Bool)]
+    public bool? AllowDisruptiveTasks { get; set; }
 
     /// <summary>Whether to sweep every server for a newer game build. Off means nothing on this host
     /// ever asks, and no update is announced.</summary>

@@ -15,6 +15,13 @@ internal sealed class SchedulerOptions
     /// </summary>
     public const int MinUpdateCheckIntervalMinutes = 5;
 
+    /// <summary>
+    /// The shortest window period this daemon accepts as a host floor. It is the same floor the
+    /// grammar itself enforces, so a host cannot set a policy that permits something the parser
+    /// refuses; a host that wants maintenance to be rarer than this raises its own number.
+    /// </summary>
+    public const int MinWindowPeriodMinutes = 10;
+
     public string KgsmPath { get; init; } = "/usr/bin/kgsm";
     public string WatchdogSocketPath { get; init; } = "/run/kgsm-watchdog/control.sock";
     public string StatusSocketPath { get; init; } = "/run/kgsm-scheduler/status.sock";
@@ -27,6 +34,19 @@ internal sealed class SchedulerOptions
     /// skip it rather than firing a surprise restart. Prevents catch-up storms.
     /// </summary>
     public int GraceWindowMinutes { get; init; } = 10;
+
+    /// <summary>
+    /// The shortest period this host permits a maintenance window to have (minutes). A window that
+    /// comes round more often is reported as one this host will not fire. At least
+    /// <see cref="MinWindowPeriodMinutes"/>.
+    /// </summary>
+    public int MinimumWindowPeriodMinutes { get; init; } = MinWindowPeriodMinutes;
+
+    /// <summary>
+    /// Whether maintenance that interrupts the people on a server may run here at all. False leaves
+    /// backups running and records every disruptive task as skipped with that reason.
+    /// </summary>
+    public bool AllowDisruptiveTasks { get; init; } = true;
 
     /// <summary>Whether to sweep the roster for newer game builds at all.</summary>
     public bool UpdateCheckEnabled { get; init; } = true;
@@ -62,6 +82,10 @@ internal sealed class SchedulerOptions
             StateDirectory = Or(s.StateDirectory, defaults.StateDirectory),
             PollIntervalSeconds = Math.Max(s.PollIntervalSeconds ?? defaults.PollIntervalSeconds, MinPollIntervalSeconds),
             GraceWindowMinutes = Math.Max(s.GraceWindowMinutes ?? defaults.GraceWindowMinutes, 0),
+            MinimumWindowPeriodMinutes = Math.Max(
+                s.MinimumWindowPeriodMinutes ?? defaults.MinimumWindowPeriodMinutes,
+                MinWindowPeriodMinutes),
+            AllowDisruptiveTasks = s.AllowDisruptiveTasks ?? defaults.AllowDisruptiveTasks,
             UpdateCheckEnabled = s.UpdateCheckEnabled ?? defaults.UpdateCheckEnabled,
             UpdateCheckIntervalMinutes = Math.Max(
                 s.UpdateCheckIntervalMinutes ?? defaults.UpdateCheckIntervalMinutes,

@@ -6,12 +6,19 @@
     "none": [
       {
         "name": "postpone",
-        "description": "Push a server's next scheduled restart back, without changing its schedule",
+        "description": "Push one maintenance window's next run back, without changing its schedule",
         "mutates": true,
         "options": [
           {
             "name": "instance",
-            "description": "The server whose next restart is deferred",
+            "description": "The server whose window is deferred",
+            "type": "string",
+            "required": true,
+            "autocomplete": false
+          },
+          {
+            "name": "window",
+            "description": "The window's id — its schedule expression, e.g. weekly.sun@04:00",
             "type": "string",
             "required": true,
             "autocomplete": false
@@ -21,6 +28,48 @@
             "description": "How far to push it back, 1 to 720. Defaults to 60.",
             "type": "integer",
             "required": false,
+            "autocomplete": false
+          }
+        ]
+      },
+      {
+        "name": "skip",
+        "description": "Drop one maintenance window's next run; the one after it is unaffected",
+        "mutates": true,
+        "options": [
+          {
+            "name": "instance",
+            "description": "The server whose window is skipped",
+            "type": "string",
+            "required": true,
+            "autocomplete": false
+          },
+          {
+            "name": "window",
+            "description": "The window's id — its schedule expression, e.g. weekly.sun@04:00",
+            "type": "string",
+            "required": true,
+            "autocomplete": false
+          }
+        ]
+      },
+      {
+        "name": "run-now",
+        "description": "Run one maintenance window at the next poll, without changing its schedule",
+        "mutates": true,
+        "options": [
+          {
+            "name": "instance",
+            "description": "The server whose window runs",
+            "type": "string",
+            "required": true,
+            "autocomplete": false
+          },
+          {
+            "name": "window",
+            "description": "The window's id — its schedule expression, e.g. weekly.sun@04:00",
+            "type": "string",
+            "required": true,
             "autocomplete": false
           }
         ]
