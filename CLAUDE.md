@@ -25,9 +25,13 @@ scheduler reads are documented in `CONFIGURATION.md`; ecosystem topology is
 - `src/Scheduler/SchedulerEngine.cs` — the wall-clock `BackgroundService`. Polls
   instance config every `PollIntervalSeconds`, computes each instance's next fire in
   its timezone, and fires `IWatchdogClient.RestartAsync(name, "scheduler", ct)` when
-  due. A `GraceWindowMinutes` guard skips fires that are too overdue (host was down)
-  to prevent catch-up storms. Also holds `SchedulerInstanceStatus` /
-  `SchedulerStatusResponse` / `ScheduleState` records.
+  due and `RestartGate` says the restart applies. A `GraceWindowMinutes` guard skips
+  fires that are too overdue (host was down) to prevent catch-up storms. Also holds
+  `SchedulerInstanceStatus` / `SchedulerStatusResponse` / `ScheduleState` records.
+- `src/Scheduler/RestartGate.cs` — re-asserts the instance's state through
+  `IWatchdogClient.GetStatusAsync` in the instant before a restart is dispatched, and
+  abandons unless the watchdog measures the instance as running. See **The restart
+  gate** below.
 - `src/Scheduler/UpdateCheckSweep.cs` — the interval `BackgroundService` that asks every
   server whether a newer build exists, via `IInstanceService.CheckUpdate(name, emit: true)`.
   Separate from the engine because the two answer to different clocks: a restart fires at a
@@ -117,6 +121,32 @@ This is a **Native AOT** project (`PublishAot=true`). Constraints: no reflection
   upstream version beside the instance and emits `instance_update_available` only for one it
   has not announced before. Nothing here compares versions, remembers an answer, or writes an
   audit row.
+
+## The restart gate
+
+A due restart is dispatched only after the instance's state is re-read from the watchdog in that
+instant. The clock decides *when*; only the watchdog knows what the instance is doing by then, and
+restarting the wrong thing is worse than not restarting.
+
+Two watchdog behaviours are what make the re-assert load-bearing. `StartAsync` is an operator
+override that clears the give-up latch and the failure streak, so dispatching into an instance the
+supervisor has given up on wipes its crash history on a timer. And a stop of an instance the daemon
+does not track succeeds as a no-op, so an ungated restart of a deliberately stopped server runs
+straight into the start half and spawns it.
+
+The gate dispatches on exactly one reading — phase `running` with a populated cgroup — and abandons
+on everything else, recording the reason into `lastRunUtc` / `lastRunOk` / `lastRunMessage` so it
+reaches the status socket. `lastRunOk` carries which kind of skip it was:
+
+- **`false` — the restart was owed and did not happen.** The watchdog did not answer (its state is
+  unknown, never read as "not running"), or the instance is a container and this daemon dispatches
+  only through the watchdog, which supervises native instances alone.
+- **`null` — the restart does not apply.** The instance is not supervised (so it is not running), the
+  watchdog has given up on it, or it is mid-way through a phase of its own. Declining is the correct
+  outcome, so it is recorded with its reason rather than raised as a failure.
+
+Backups are ungated: kgsm records the state an archive was captured in, so a scheduled backup is
+valid whatever the instance is doing.
 
 ## Status socket
 

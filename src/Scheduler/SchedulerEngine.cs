@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheKrystalShip.KGSM.Core.Interfaces;
 using TheKrystalShip.KGSM.Core.Models;
+using TheKrystalShip.KGSM.Core.Models.Enums;
 using TheKrystalShip.KGSM.Lifecycle;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
@@ -169,7 +170,10 @@ internal sealed class SchedulerEngine(
             if (IsDue(restart, now))
             {
                 if (!TooOverdue(name, "restart", restart, now))
-                    Begin(name, "restart", ct2 => FireRestartAsync(name, ct2));
+                {
+                    var runtime = instance.Runtime;
+                    Begin(name, "restart", ct2 => FireRestartAsync(name, runtime, ct2));
+                }
 
                 restart = restart with
                 {
@@ -293,8 +297,31 @@ internal sealed class SchedulerEngine(
         }, CancellationToken.None);
     }
 
-    private async Task FireRestartAsync(string name, CancellationToken ct)
+    /// <summary>
+    /// Fires a due restart, once the instance's state at this instant says the restart applies.
+    /// </summary>
+    /// <remarks>
+    /// The state is re-read here rather than carried from the tick that scheduled the fire: the
+    /// operation runs off the tick, and what the instance is doing when the clock comes round is the
+    /// only thing that decides whether restarting it is the right act. <see cref="RestartGate"/>
+    /// holds what a verdict is made of; every skip is recorded so the reason reaches the status
+    /// socket.
+    /// </remarks>
+    private async Task FireRestartAsync(string name, InstanceRuntime? runtime, CancellationToken ct)
     {
+        var gate = await RestartGate.EvaluateAsync(watchdog, name, runtime, ct).ConfigureAwait(false);
+        if (gate.Outcome != RestartGateOutcome.Dispatch)
+        {
+            logger.LogInformation("{Instance}: {Reason}", name, gate.Message);
+            registry.Update(name, s => s with
+            {
+                LastRunUtc = DateTimeOffset.UtcNow,
+                LastRunOk = gate.LastRunOk,
+                LastRunMessage = gate.Message,
+            });
+            return;
+        }
+
         logger.LogInformation("{Instance}: firing scheduled restart", name);
 
         var result = await watchdog.RestartAsync(name, "scheduler", ct).ConfigureAwait(false);

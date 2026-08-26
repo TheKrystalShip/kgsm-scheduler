@@ -4,6 +4,29 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — a scheduled restart re-asserts the instance's state before it dispatches (`2.11.0`)
+
+`RestartGate` reads the instance back from the watchdog in the instant before a restart is
+dispatched, and restarts only what the watchdog measures as running: phase `running` over a
+populated cgroup. Everything else is abandoned and recorded.
+
+Two watchdog behaviours are why. `StartAsync` is an operator override that clears the give-up latch
+and the failure streak, so a scheduled restart of an instance the supervisor has given up on wipes
+its crash history on a timer. And a stop of an instance the daemon does not track succeeds as a
+no-op, so a restart of a deliberately stopped server ran into the start half and spawned it.
+
+Every skip lands on the status socket as `lastRunUtc` / `lastRunOk` / `lastRunMessage`. `lastRunOk`
+is `false` for a restart that was owed and did not happen — an unreachable watchdog, or a container
+instance, which this daemon cannot dispatch to at all — and `null` for one that does not apply,
+where declining is the correct outcome and a red row would be wrong.
+
+⚠ An unreachable watchdog is never read as "not running". It abandons with the state stated as
+unknown, which is a different sentence from the one written for an instance the watchdog answers
+about and does not supervise.
+
+Backups are unaffected: kgsm records the state an archive was captured in, so a scheduled backup is
+valid whatever the instance is doing.
+
 ### Changed — a packaged install enables and starts the scheduler (`2.10.0`)
 
 `packaging/kgsm-scheduler.install` applies kgsm-base's `50-kgsm.preset` to this project's units in
