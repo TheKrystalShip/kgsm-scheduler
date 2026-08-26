@@ -214,6 +214,7 @@ internal sealed class WatchdogClientStub : IWatchdogClient
     public Task<WatchdogActionResult> SetCpuPriorityAsync(string instanceName, string priority, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
     public Task<WatchdogActionResult> RestartAsync(string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
     public Task<IReadOnlyList<WatchdogInstanceState>> ListAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<WatchdogInstanceState>>>();
+    public Task<IReadOnlyList<WatchdogRunTimes>> GetRunTimesAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<WatchdogRunTimes>>>();
     public IAsyncEnumerable<string> FollowConsoleAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<IAsyncEnumerable<string>>();
     public Task<IReadOnlyList<string>> GetConsoleTailAsync(string instanceName, int lines, CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<string>>>();
     public Task<IReadOnlyList<WatchdogConsoleRun>> GetConsoleRunsAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<WatchdogConsoleRun>>>();

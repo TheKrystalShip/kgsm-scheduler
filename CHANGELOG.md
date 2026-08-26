@@ -4,6 +4,34 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Added — a server tells the people on it that a restart is coming
+
+At each lead time an instance declares (`announce_lead_minutes`, e.g. `15,5,1`), the scheduler
+announces the upcoming restart through the game's own console, via `IInstanceService.Announce`. The
+message is the instance's `announce_restart_message` with `{minutes}` and `{instance}` substituted;
+the engine then substitutes that into the game's own broadcast template.
+
+- **Announcing is opt-in and degrades to silence.** No lead times, no `broadcast_command` for the
+  game, or no message all mean the restart happens exactly as it does now, unannounced. None of them
+  is an error.
+- **Several overdue marks speak once, as the smallest.** A daemon that was down arrives to find 15, 5
+  and 1 all passed; saying "fifteen minutes" when the restart is one minute away is the failure this
+  avoids. The marks it passes over are spent, not queued.
+- **What was already said survives a restart of this daemon.** `pending-announcements.json` in
+  `Scheduler__StateDirectory` records which marks have been spoken about which fire, so a restart
+  mid-countdown neither repeats the warnings nor forgets it gave them.
+- **An abandoned restart is retracted.** Whenever an announced restart does not happen — the gate
+  declines it, the schedule is turned off, the target moves, or the fire is too overdue to run — the
+  server is told so with `announce_restart_cancelled_message`. A warning followed by silence sends
+  players away for a restart that never comes.
+- **A server with nobody on it is not announced to**, when the watchdog can actually see its players.
+  ⚠ An instance whose players it cannot observe is announced to anyway: "no players detected" and
+  "detection unavailable" are different facts, and reading the second as the first silences a full
+  server.
+
+⚠ A delivered announcement means the engine wrote to the console, never that a person read it.
+
+
 ### Changed — a scheduled restart re-asserts the instance's state before it dispatches (`2.11.0`)
 
 `RestartGate` reads the instance back from the watchdog in the instant before a restart is

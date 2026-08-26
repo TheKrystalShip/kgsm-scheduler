@@ -52,6 +52,9 @@ internal sealed class Program
         builder.Logging.AddSystemdConsole();
 
         builder.Services.AddSingleton<ScheduleRegistry>();
+        builder.Services.AddSingleton(sp => new PendingAnnouncementStore(
+            options.StateDirectory,
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger<PendingAnnouncementStore>()));
 
         // The scheduler consumes no events — it reads config from the filesystem
         // (IInstanceService shells out to kgsm) and dispatches through the watchdog client.

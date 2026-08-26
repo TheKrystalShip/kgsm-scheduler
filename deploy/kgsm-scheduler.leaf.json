@@ -104,6 +104,16 @@
       "pairedApiKey": "Api__SchedulerControlSocketPath"
     },
     {
+      "key": "stateDirectory",
+      "env": "Scheduler__StateDirectory",
+      "label": "State directory",
+      "description": "Directory the scheduler keeps its own state in. It remembers which servers have already been told a restart is coming, so a restart of the scheduler does not repeat the warnings or forget that it promised them.",
+      "group": "wiring",
+      "type": "path",
+      "default": "/var/lib/kgsm-scheduler",
+      "risk": "wiring"
+    },
+    {
       "key": "pollIntervalSec",
       "env": "Scheduler__PollIntervalSeconds",
       "label": "Schedule re-scan interval",

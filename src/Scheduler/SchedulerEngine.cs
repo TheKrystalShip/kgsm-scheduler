@@ -64,6 +64,7 @@ internal sealed class SchedulerEngine(
     LeafLifecycle lifecycle,
     IOptions<SchedulerOptions> options,
     ScheduleRegistry registry,
+    PendingAnnouncementStore pending,
     ILogger<SchedulerEngine> logger) : BackgroundService
 {
     /// <summary>
@@ -72,6 +73,13 @@ internal sealed class SchedulerEngine(
     /// A fire that arrives while an instance is busy is skipped and recorded, never queued.
     /// </summary>
     private readonly ConcurrentDictionary<string, byte> _busy = new(StringComparer.Ordinal);
+
+    /// <summary>Who this daemon acts as in the audit trail. The <c>system:</c> form is what a
+    /// consumer reads as an autonomous leaf rather than as a person on the local host.</summary>
+    private const string ProvenanceActor = "system:scheduler";
+
+    /// <summary>The surface a human drove. A scheduled restart has none.</summary>
+    private const string ProvenanceOrigin = "system";
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -135,7 +143,7 @@ internal sealed class SchedulerEngine(
         }
     }
 
-    private Task TickAsync(CancellationToken ct)
+    private async Task TickAsync(CancellationToken ct)
     {
         var all = instances.GetAll();
 
@@ -149,7 +157,7 @@ internal sealed class SchedulerEngine(
                 "could not read the instance list from kgsm; this daemon knows of no schedules, which "
                 + "looks exactly like a host that has none");
 
-            return Task.CompletedTask;
+            return;
         }
 
         lifecycle.MarkRecovered(SchedulerComponents.Kgsm);
@@ -167,12 +175,20 @@ internal sealed class SchedulerEngine(
             var backup = Plan(state.Backup,
                 instance.BackupSchedule, instance.BackupTime, instance.BackupDay, tz, now);
 
+            await AnnounceUpcomingAsync(name, instance, restart, now, ct).ConfigureAwait(false);
+
             if (IsDue(restart, now))
             {
                 if (!TooOverdue(name, "restart", restart, now))
                 {
                     var runtime = instance.Runtime;
-                    Begin(name, "restart", ct2 => FireRestartAsync(name, runtime, ct2));
+                    Begin(name, "restart", ct2 => FireRestartAsync(name, instance, runtime, ct2));
+                }
+                else
+                {
+                    // Too late to run, so the warning stands against nothing. Whoever was told is
+                    // told it is off, for the same reason an abandoned dispatch retracts.
+                    await RetractAsync(name, instance, ct).ConfigureAwait(false);
                 }
 
                 restart = restart with
@@ -215,7 +231,6 @@ internal sealed class SchedulerEngine(
         }
 
         registry.Snapshot = new SchedulerStatusResponse(statuses);
-        return Task.CompletedTask;
     }
 
     private static DateTimeOffset? AsOffset(DateTime? utc) =>
@@ -307,7 +322,175 @@ internal sealed class SchedulerEngine(
     /// holds what a verdict is made of; every skip is recorded so the reason reaches the status
     /// socket.
     /// </remarks>
-    private async Task FireRestartAsync(string name, InstanceRuntime? runtime, CancellationToken ct)
+    /// <summary>
+    /// Tells the people on a server that a restart is coming, at each lead time it declares.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Runs on the tick rather than off it: an announcement is one console write, and doing it
+    /// inline keeps the spoken marks and the persisted record of them in the same sequence.
+    /// </para>
+    /// <para>
+    /// Every reason to say nothing is a normal outcome, not a failure — the game declares no
+    /// broadcast command, the instance sets no lead times, nobody is connected, or the restart is
+    /// still further off than the largest lead.
+    /// </para>
+    /// </remarks>
+    private async Task AnnounceUpcomingAsync(
+        string name, Instance instance, SchedulePlan plan, DateTime now, CancellationToken ct)
+    {
+        var existing = pending.Get(name);
+
+        if (plan.NextUtc is not DateTime target || !AnnouncementPlan.CanAnnounce(instance))
+        {
+            // A window standing against a schedule that has been turned off, or a game that can no
+            // longer carry the message, is owed its retraction like any other abandonment.
+            if (existing is not null)
+            {
+                await RetractAsync(name, instance, ct).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        var leads = AnnouncementPlan.ParseLeadMinutes(instance.AnnounceLeadMinutes);
+        double minutesUntil = (target - now).TotalMinutes;
+
+        if (minutesUntil > leads[0])
+        {
+            return;
+        }
+
+        // A target that moved — a postponement, or an edited schedule — is a different restart from
+        // the one anybody was told about. The warnings already given are void, and saying so is what
+        // keeps the earlier countdown from ending in an unexplained silence: told "one minute", then
+        // nothing, then a fresh countdown an hour later with no word about the first.
+        IReadOnlyList<int> announced = [];
+
+        if (existing is not null)
+        {
+            if (existing.FireAtUtc == new DateTimeOffset(target, TimeSpan.Zero))
+            {
+                announced = existing.AnnouncedLeads;
+            }
+            else
+            {
+                await RetractAsync(name, instance, ct).ConfigureAwait(false);
+            }
+        }
+
+        int? mark = AnnouncementPlan.NextMark(leads, announced, minutesUntil, out var due);
+        if (mark is null)
+        {
+            return;
+        }
+
+        var spent = announced.Concat(due).Distinct().ToArray();
+
+        // Whether anybody is listening is the watchdog's answer and only its. An instance it cannot
+        // observe is announced to anyway: "no players detected" and "detection is unavailable" are
+        // different facts, and reading the second as the first silences a server full of people.
+        if (await NobodyIsConnectedAsync(name, ct).ConfigureAwait(false))
+        {
+            logger.LogDebug("{Instance}: skipping the {Mark}-minute announcement — nobody is connected", name, mark);
+            pending.Set(name, new PendingAnnouncement(new DateTimeOffset(target, TimeSpan.Zero), spent));
+            return;
+        }
+
+        string message = AnnouncementPlan.Resolve(instance.AnnounceRestartMessage!, instance, mark);
+        var result = instances.Announce(name, message, actor: ProvenanceActor, origin: ProvenanceOrigin);
+
+        if (result.ExitCode != 0)
+        {
+            // The restart is the job; a warning that could not be delivered does not stop it. Never
+            // silent, though — an announcement path that fails quietly is indistinguishable from one
+            // nobody wired up.
+            logger.LogWarning("{Instance}: could not announce the restart: {Error}", name, result.Stderr);
+        }
+        else
+        {
+            logger.LogInformation("{Instance}: announced the restart, {Mark} minute(s) out", name, mark);
+        }
+
+        // The mark is spent either way. A send that failed will fail again on the next tick, and
+        // retrying it would turn one undeliverable warning into one per tick until the restart.
+        pending.Set(name, new PendingAnnouncement(new DateTimeOffset(target, TimeSpan.Zero), spent));
+    }
+
+    /// <summary>
+    /// Tells a server the restart it was warned about is not happening, and forgets the warning.
+    /// </summary>
+    /// <remarks>
+    /// A warning followed by silence is worse than no warning: players log off for a restart that
+    /// never comes, and nothing tells them otherwise. Called wherever an announced restart is
+    /// abandoned — the gate declining it, a schedule turned off mid-window, a fire too overdue to run.
+    /// No-op for an instance that was never told anything.
+    /// </remarks>
+    private async Task RetractAsync(string name, Instance instance, CancellationToken ct)
+    {
+        if (pending.Get(name) is null)
+        {
+            return;
+        }
+
+        pending.Clear(name);
+
+        string? template = instance.AnnounceRestartCancelledMessage;
+        if (string.IsNullOrWhiteSpace(template) || !BroadcastCommand.IsSupported(instance.BroadcastCommand))
+        {
+            return;
+        }
+
+        if (await NobodyIsConnectedAsync(name, ct).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        string message = AnnouncementPlan.Resolve(template, instance, minutes: null);
+        var result = instances.Announce(name, message, actor: ProvenanceActor, origin: ProvenanceOrigin);
+
+        if (result.ExitCode != 0)
+        {
+            logger.LogWarning("{Instance}: could not announce the cancellation: {Error}", name, result.Stderr);
+        }
+        else
+        {
+            logger.LogInformation("{Instance}: announced that the restart is cancelled", name);
+        }
+    }
+
+    /// <summary>
+    /// Whether the watchdog can see this instance's players and reports none connected.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ Returns <see langword="false"/> whenever the answer is not a measured empty roster — an
+    /// unreachable daemon, an instance it does not track, or one whose players it cannot observe at
+    /// all. Every one of those means "announce anyway": an unobservable server is not an empty one,
+    /// and treating it as empty is how a full server gets restarted without warning.
+    /// </remarks>
+    private async Task<bool> NobodyIsConnectedAsync(string name, CancellationToken ct)
+    {
+        try
+        {
+            var presence = await watchdog.GetPlayerPresenceAsync(ct).ConfigureAwait(false);
+
+            return presence is not null
+                && presence.TryGetValue(name, out var instancePresence)
+                && instancePresence.IsDetected
+                && instancePresence.Players.Count == 0;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private async Task FireRestartAsync(
+        string name, Instance instance, InstanceRuntime? runtime, CancellationToken ct)
     {
         var gate = await RestartGate.EvaluateAsync(watchdog, name, runtime, ct).ConfigureAwait(false);
         if (gate.Outcome != RestartGateOutcome.Dispatch)
@@ -319,6 +502,11 @@ internal sealed class SchedulerEngine(
                 LastRunOk = gate.LastRunOk,
                 LastRunMessage = gate.Message,
             });
+
+            // Whoever was told this restart was coming is told it is not. The gate declining is the
+            // commonest way an announced restart is abandoned — the server was stopped, or the
+            // watchdog gave up on it, during the countdown.
+            await RetractAsync(name, instance, ct).ConfigureAwait(false);
             return;
         }
 
@@ -334,6 +522,10 @@ internal sealed class SchedulerEngine(
             LastRunOk = result.Ok,
             LastRunMessage = result.Message,
         });
+
+        // The restart the warnings were about has happened, so the debt is settled and the next
+        // window starts from nothing said.
+        pending.Clear(name);
     }
 
     /// <summary>

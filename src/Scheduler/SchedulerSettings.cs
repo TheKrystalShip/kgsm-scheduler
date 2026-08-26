@@ -61,6 +61,15 @@ internal sealed class SchedulerSettings
         Risk = LeafRisk.Wiring, PairedApiKey = "Api__SchedulerControlSocketPath")]
     public string ControlSocketPath { get; set; } = "/run/kgsm-scheduler/control.sock";
 
+    /// <summary>Directory this daemon keeps state in that must survive a restart of it — which
+    /// announcements have already been made about a restart that has not happened yet.</summary>
+    /// <panel>Directory the scheduler keeps its own state in. It remembers which servers have already
+    /// been told a restart is coming, so a restart of the scheduler does not repeat the warnings or
+    /// forget that it promised them.</panel>
+    [LeafField("stateDirectory", "State directory", Group = "wiring", Type = LeafType.Path,
+        Risk = LeafRisk.Wiring)]
+    public string StateDirectory { get; set; } = "/var/lib/kgsm-scheduler";
+
     /// <summary>How often each server's schedule is re-read from KGSM (seconds). Raised to
     /// <see cref="SchedulerOptions.MinPollIntervalSeconds"/> if lower.</summary>
     /// <panel>How often each server's schedule is re-read from KGSM. This bounds how quickly a schedule

@@ -32,6 +32,10 @@ scheduler reads are documented in `CONFIGURATION.md`; ecosystem topology is
   `IWatchdogClient.GetStatusAsync` in the instant before a restart is dispatched, and
   abandons unless the watchdog measures the instance as running. See **The restart
   gate** below.
+- `src/Scheduler/AnnouncementPlan.cs` — pure logic for what a server says before a restart:
+  reading the configured lead times, picking which mark to speak, and resolving the message.
+- `src/Scheduler/PendingAnnouncementStore.cs` — remembers, across a restart of this daemon, which
+  marks have already been spoken about which fire. See **Announcing a restart** below.
 - `src/Scheduler/UpdateCheckSweep.cs` — the interval `BackgroundService` that asks every
   server whether a newer build exists, via `IInstanceService.CheckUpdate(name, emit: true)`.
   Separate from the engine because the two answer to different clocks: a restart fires at a
@@ -148,6 +152,46 @@ reaches the status socket. `lastRunOk` carries which kind of skip it was:
 Backups are ungated: kgsm records the state an archive was captured in, so a scheduled backup is
 valid whatever the instance is doing.
 
+## Announcing a restart
+
+At each lead time an instance declares (`announce_lead_minutes`, e.g. `15,5,1`), the engine tells the
+people on that server the restart is coming, through the game's own console via
+`IInstanceService.Announce`. The text is the instance's `announce_restart_message` with `{minutes}`
+and `{instance}` resolved; the engine then substitutes *that* into the game's own broadcast template.
+Two substitutions, different placeholders, different owners — which is why a message containing
+`{message}` needs no special handling here.
+
+**Announcing is opt-in and every reason to stay quiet is normal.** No lead times, no
+`broadcast_command` for the game, or no message each mean the restart happens exactly as it otherwise
+would, unannounced. None is an error, and none blocks the restart.
+
+**Several marks that fall due at once speak once, as the smallest.** A daemon that was down arrives to
+find 15, 5 and 1 all passed. The smallest is the only true statement of the three, so it is the one
+spoken and the rest are spent without being said — a queue would count the restart upward.
+
+**A mark is spent whether or not its announcement was delivered.** A send that failed will fail again
+next tick, and retrying would turn one undeliverable warning into one per tick until the restart.
+
+**What was said survives a restart of this daemon.** `pending-announcements.json` in
+`Scheduler__StateDirectory` records which marks were spoken about which fire. An entry is a *debt* —
+it exists only while something has been said about a restart that has not happened — and never a
+schedule: the schedule is re-derived from the instance's config every tick, so deleting the file
+costs nothing but the memory of what was already announced.
+
+**An announced restart that does not happen is retracted**, with `announce_restart_cancelled_message`.
+That covers the gate declining it, the schedule being turned off mid-window, the fire being too
+overdue to run, and the target moving under a postponement or an edited schedule. A warning followed
+by silence is worse than no warning: players leave for a restart that never comes and nothing tells
+them otherwise.
+
+⚠ **A server with nobody on it is not announced to — but only when the watchdog can actually see its
+players.** `GetPlayerPresenceAsync` reporting `IsDetected` with an empty roster is a measured
+absence. An unreachable daemon, an untracked instance, or one whose players cannot be observed at all
+are each announced to anyway: "no players detected" and "detection unavailable" are different facts,
+and reading the second as the first silences a server full of people.
+
+⚠ **Delivered means the engine wrote to the console, never that a person read it.**
+
 ## Status socket
 
 Default `/run/kgsm-scheduler/status.sock` (`Scheduler__StatusSocketPath`). One NDJSON
@@ -196,6 +240,11 @@ tier check owes it itself — `kgsm-api` gates its Postpone button at operator b
 in-memory registry, so a restart recomputes it from the instance's config and the deferred fire comes
 back. That is the honest consequence of not editing the schedule, and it is the right trade for a
 verb that means "not for the next hour".
+
+Postponing moves the target, and a moved target is a different restart from the one anybody was
+warned about: the engine retracts the warnings already given and announces the new window from
+scratch. What persists across a restart of this daemon is only what was *said*, never the schedule —
+so the deferred fire coming back also brings back an unannounced countdown, announced afresh.
 
 ## Version tracking
 
