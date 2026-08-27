@@ -4,6 +4,13 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — an event is named by a type (`3.2.0`)
+
+An event's name is a type rather than a string, so a name that is not a name cannot reach the journal.
+Where this producer chooses a name at run time, the name is read at that boundary and a value that is
+not one is reported and dropped — a line no consumer matches fails silently everywhere downstream,
+which is the failure this refuses to write.
+
 ### Added — the `update` task (`3.1.0`)
 
 A maintenance window can carry `update`, and this daemon runs it:
