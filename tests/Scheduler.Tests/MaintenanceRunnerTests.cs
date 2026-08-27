@@ -20,8 +20,11 @@ public sealed class MaintenanceRunnerTests : IDisposable
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
-    private static readonly MaintenanceTaskCatalog Catalog = new(
-        [new BackupTask(NullLogger<BackupTask>.Instance), new RestartTask(NullLogger<RestartTask>.Instance)]);
+    private static readonly MaintenanceTaskCatalog Catalog = new([
+        new BackupTask(NullLogger<BackupTask>.Instance),
+        new UpdateTask(Options.Create(new SchedulerOptions()), NullLogger<UpdateTask>.Instance),
+        new RestartTask(NullLogger<RestartTask>.Instance),
+    ]);
 
     private static Instance NewInstance(InstanceRuntime runtime = InstanceRuntime.Native) => new()
     {
@@ -113,6 +116,85 @@ public sealed class MaintenanceRunnerTests : IDisposable
         Assert.Equal(["backup", "restart"], run!.Tasks.Select(t => t.Name));
     }
 
+    // ---- one park, one bring-up --------------------------------------------
+
+    /// <summary>
+    /// The window a maintenance window exists for. The park is held around the update alone — the
+    /// archive before it runs against a live server — and the restart standing after it is already
+    /// delivered by the release, so one window is one bring-up.
+    /// </summary>
+    [Fact]
+    public async Task An_update_window_parks_once_and_the_restart_rides_the_release()
+    {
+        _watchdog.Calls = _instances.Calls;
+        _instances.Recorded(Name, current: "1.1.87", latest: "1.1.110", updatesAvailable: true);
+        Plan("daily@04:00/backup,update,restart");
+
+        MaintenanceRun? run = await RunAsync(NewRunner(), "daily@04:00/backup,update,restart");
+
+        Assert.Equal(MaintenanceOutcomes.Ok, run!.Outcome);
+        Assert.Equal(
+            [("backup", MaintenanceOutcomes.Ok), ("update", MaintenanceOutcomes.Ok), ("restart", MaintenanceOutcomes.Ok)],
+            run.Tasks.Select(t => (t.Name, t.Outcome)));
+
+        Assert.Equal([
+            $"backup:{Name}:scheduled:system:scheduler:system",
+            $"prune:{Name}:5",
+            "statuses:fast=True",
+            $"park:{Name}:scheduler",
+            $"update:{Name}:system:scheduler:system",
+            $"release:{Name}:scheduler",
+        ], _instances.Calls);
+
+        // The release is the bounce: a second one would be a second bring-up for one window.
+        Assert.Empty(_watchdog.Restarts);
+        Assert.Contains("already delivered", run.Tasks[2].Message);
+    }
+
+    /// <summary>
+    /// Nothing was parked, so nothing brought the instance back and the restart is owed as it always
+    /// was.
+    /// </summary>
+    [Fact]
+    public async Task A_window_whose_update_finds_nothing_to_do_still_restarts()
+    {
+        _watchdog.Calls = _instances.Calls;
+        _instances.Recorded(Name, current: "1.1.110", latest: "1.1.110", updatesAvailable: false);
+        Plan("daily@04:00/update,restart");
+
+        MaintenanceRun? run = await RunAsync(NewRunner(), "daily@04:00/update,restart");
+
+        Assert.Equal(MaintenanceOutcomes.Ok, run!.Outcome);
+        Assert.Equal(
+            [("update", MaintenanceOutcomes.Skipped), ("restart", MaintenanceOutcomes.Ok)],
+            run.Tasks.Select(t => (t.Name, t.Outcome)));
+        Assert.Contains("no newer build stands", run.Tasks[0].Message);
+        Assert.Equal([Name], _watchdog.Restarts);
+        Assert.DoesNotContain(_instances.Calls, c => c.StartsWith("park:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The release runs whatever the update did, so a window that fails still hands the server back
+    /// — and the tasks it never reached are recorded as never having had their turn.
+    /// </summary>
+    [Fact]
+    public async Task A_failed_update_hands_the_server_back_before_the_window_aborts()
+    {
+        _watchdog.Calls = _instances.Calls;
+        _instances.UpdateExitCode = 1;
+        _instances.UpdateStderr = "steamcmd: could not reach the content servers";
+        _instances.Recorded(Name, current: "1.1.87", latest: "1.1.110", updatesAvailable: true);
+        Plan("daily@04:00/update,restart");
+
+        MaintenanceRun? run = await RunAsync(NewRunner(), "daily@04:00/update,restart");
+
+        Assert.Equal(MaintenanceOutcomes.Failed, run!.Outcome);
+        Assert.Equal(
+            [("update", MaintenanceOutcomes.Failed), ("restart", MaintenanceOutcomes.Aborted)],
+            run.Tasks.Select(t => (t.Name, t.Outcome)));
+        Assert.Equal($"release:{Name}:scheduler", _instances.Calls[^1]);
+    }
+
     // ---- a failure abandons the rest ---------------------------------------
 
     [Fact]
@@ -198,6 +280,20 @@ public sealed class MaintenanceRunnerTests : IDisposable
         Assert.Empty(NewRunner().DisruptiveTasks(window, NewInstance(InstanceRuntime.Container)));
         Assert.Empty(NewRunner().DisruptiveTasks(Read("daily@05:00/backup"), NewInstance()));
         Assert.Equal([MaintenanceTask.Restart], NewRunner().DisruptiveTasks(window, NewInstance()));
+    }
+
+    /// <summary>
+    /// An update implies the restart that makes it the running build, so the people on the server
+    /// are told one sentence rather than two.
+    /// </summary>
+    [Fact]
+    public void A_window_carrying_an_update_announces_it_as_updating_and_restarting()
+    {
+        IReadOnlyList<MaintenanceTask> disruptive =
+            NewRunner().DisruptiveTasks(Read("daily@04:00/backup,update,restart"), NewInstance());
+
+        Assert.Equal([MaintenanceTask.Update, MaintenanceTask.Restart], disruptive);
+        Assert.Equal("updating and restarting", AnnouncementPlan.Reason(disruptive));
     }
 
     /// <summary>

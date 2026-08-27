@@ -20,9 +20,17 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 /// <c>skipped</c> on itself, never <c>failed</c>, and never in another window's fields.
 /// </para>
 /// <para>
-/// <b>Nothing here holds the instance down.</b> A backup runs against a live server — kgsm records
-/// the state an archive was captured in — and a restart is one atomic watchdog transition. No task
-/// needs a span in which the instance stays stopped, so no window parks one.
+/// <b>A park belongs to the task that needs one, not to the window.</b> Only the update needs a span
+/// in which the instance stays stopped, so it is the update that parks — around the engine call and
+/// nothing else. Parking at the top of the window instead would hold a live server down through the
+/// archive taken before it, and would put the record of the bounce in a place no task's outcome
+/// could measure: a release the watchdog refuses leaves the instance down, and only the task that
+/// asked for the park is in a position to report that.
+/// </para>
+/// <para>
+/// One park is therefore one bring-up. A restart standing after a task that has already drained and
+/// respawned the instance is already delivered, and the tasks settle that between them through
+/// <see cref="WindowProgress"/> rather than bouncing a server twice for one window.
 /// </para>
 /// </remarks>
 internal sealed class MaintenanceRunner(
@@ -129,6 +137,10 @@ internal sealed class MaintenanceRunner(
         bool aborted = false;
         bool disruptiveHappened = false;
 
+        // One context for the whole window: the tasks are stateless singletons, so this is where
+        // what one of them did to the instance is available to the next.
+        var context = new MaintenanceContext(name, instance, read.Window, instances, watchdog, new WindowProgress());
+
         logger.LogInformation("{Instance}: running {Window} ({Tasks})",
             name, windowId, string.Join(", ", read.Window.Tasks.Select(t => t.ToToken())));
 
@@ -162,7 +174,7 @@ internal sealed class MaintenanceRunner(
             TaskGate gate;
             try
             {
-                gate = await implementation.GateAsync(instance, watchdog, ct).ConfigureAwait(false);
+                gate = await implementation.GateAsync(context, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -191,7 +203,6 @@ internal sealed class MaintenanceRunner(
             TaskOutcome outcome;
             try
             {
-                var context = new MaintenanceContext(name, instance, read.Window, instances, watchdog);
                 outcome = await implementation.RunAsync(context, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -218,8 +229,10 @@ internal sealed class MaintenanceRunner(
         logger.LogInformation("{Instance}: {Window} finished — {Outcome}", name, windowId, run.Outcome);
 
         // The thing the warnings were about either happened, settling the debt, or it did not, and a
-        // countdown that ends in nothing is owed the sentence that says so.
-        if (disruptiveHappened)
+        // countdown that ends in nothing is owed the sentence that says so. An interruption the
+        // people on the server actually lived through settles it whatever the work behind it came to
+        // — telling them afterwards that maintenance was cancelled would be the false sentence.
+        if (disruptiveHappened || context.Progress.InstanceCycled)
         {
             announcer.Settle(name, windowId);
         }

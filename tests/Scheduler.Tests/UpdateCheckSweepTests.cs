@@ -66,7 +66,7 @@ public class UpdateCheckSweepTests
     [InlineData("   \n  ")]
     public void NoFailureDetailSummarizesToNothing(string? stderr)
     {
-        Assert.Null(UpdateCheckSweep.Summarize(stderr));
+        Assert.Null(EngineDetail.Summarize(stderr));
     }
 
     // kgsm writes several lines of context on a failed check and the status snapshot is one NDJSON
@@ -81,12 +81,12 @@ public class UpdateCheckSweepTests
 
         Assert.Equal(
             "[ERROR] instances.sh:2219 Could not determine the latest version for 'starbound'",
-            UpdateCheckSweep.Summarize(stderr));
+            EngineDetail.Summarize(stderr));
     }
 
     [Fact]
     public void ASingleLineFailureIsTrimmed()
     {
-        Assert.Equal("registry did not answer", UpdateCheckSweep.Summarize("  registry did not answer \n"));
+        Assert.Equal("registry did not answer", EngineDetail.Summarize("  registry did not answer \n"));
     }
 }

@@ -26,6 +26,33 @@ internal sealed class InstanceServiceStub : IInstanceService
     /// <summary>Exit code the next prune returns.</summary>
     public int PruneExitCode { get; set; }
 
+    /// <summary>Exit code the next update returns.</summary>
+    public int UpdateExitCode { get; set; }
+
+    /// <summary>What that failure says.</summary>
+    public string UpdateStderr { get; set; } = "";
+
+    /// <summary>
+    /// The version record the engine keeps beside each instance, as the fast fleet read answers it.
+    /// An instance absent from here has no reading at all.
+    /// </summary>
+    public Dictionary<string, Reading<InstanceRuntimeStatus>> Statuses { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Records what the engine holds for <paramref name="name"/> after a real check.</summary>
+    public void Recorded(string name, string? current, string? latest, bool? updatesAvailable) =>
+        Statuses[name] = Reading<InstanceRuntimeStatus>.Measured(new InstanceRuntimeStatus
+        {
+            InstanceName = name,
+            Version = new VersionInfo
+            {
+                Current = current,
+                Latest = latest,
+                Checked = updatesAvailable is not null,
+                CheckedAt = updatesAvailable is null ? null : DateTimeOffset.UtcNow,
+                UpdatesAvailable = updatesAvailable,
+            },
+        });
+
     /// <summary>Blocks inside CreateBackup until released, so a run can be held open mid-window.</summary>
     public SemaphoreSlim? HoldBackup { get; set; }
 
@@ -51,12 +78,23 @@ internal sealed class InstanceServiceStub : IInstanceService
         return new KgsmResult(0);
     }
 
+    public KgsmResult Update(string instanceName, string? actor = null, string? origin = null)
+    {
+        Calls.Add($"update:{instanceName}:{actor}:{origin}");
+        return new KgsmResult(UpdateExitCode, Stderr: UpdateStderr);
+    }
+
+    public Dictionary<string, Reading<InstanceRuntimeStatus>> GetAllStatuses(bool fast = false)
+    {
+        Calls.Add($"statuses:fast={fast}");
+        return Statuses;
+    }
+
     private static T Unused<T>() => throw new NotSupportedException("not exercised by these tests");
 
     public Dictionary<string, Instance>? GetAllOrNull() => Unused<Dictionary<string, Instance>?>();
     public Instance? GetInstanceInfo(string instanceName) => Unused<Instance?>();
     public InstanceRuntimeStatus? GetInstanceStatus(string instanceName) => Unused<InstanceRuntimeStatus?>();
-    public Dictionary<string, Reading<InstanceRuntimeStatus>> GetAllStatuses(bool fast = false) => Unused<Dictionary<string, Reading<InstanceRuntimeStatus>>>();
     public KgsmResult Install(string blueprintName, string? library = null, string? version = null, string? displayName = null, string? actor = null, string? origin = null, int? port = null, bool? start = null, string? id = null) => Unused<KgsmResult>();
     public KgsmResult Uninstall(string instanceName, string? actor = null, string? origin = null) => Unused<KgsmResult>();
     public KgsmResult Move(string instanceName, string library, bool skipSpaceCheck = false, string? actor = null, string? origin = null) => Unused<KgsmResult>();
@@ -71,7 +109,6 @@ internal sealed class InstanceServiceStub : IInstanceService
     public KgsmResult GetInstalledVersion(string instanceName) => Unused<KgsmResult>();
     public KgsmResult GetLatestVersion(string instanceName) => Unused<KgsmResult>();
     public KgsmResult CheckUpdate(string instanceName, bool emit = false, string? actor = null, string? origin = null) => Unused<KgsmResult>();
-    public KgsmResult Update(string instanceName, string? actor = null, string? origin = null) => Unused<KgsmResult>();
     public KgsmResult GetBackups(string instanceName) => Unused<KgsmResult>();
     public List<InstanceBackup> GetBackupsDetailed(string instanceName) => Unused<List<InstanceBackup>>();
     public KgsmResult PinBackup(string instanceName, string backupName, string? actor = null, string? origin = null) => Unused<KgsmResult>();

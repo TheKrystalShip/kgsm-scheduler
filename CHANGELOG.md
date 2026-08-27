@@ -4,6 +4,35 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Added — the `update` task (`3.1.0`)
+
+A maintenance window can carry `update`, and this daemon runs it:
+
+```
+maintenance_windows="daily@05:00/backup;weekly.sun@04:00/backup,update,restart"
+```
+
+- **It dispatches only on the engine's recorded evidence that a newer build stands**, read back
+  through the fast fleet status call, which touches no network. An up-to-date server, and one whose
+  upstream nothing has recorded, are each recorded `skipped` with that reason. Asking upstream here
+  would cost a real steamcmd login before every update window, and an update with nothing to do is a
+  server stopped for nothing.
+- **The engine call runs behind a watchdog park** (`BeginMaintenanceAsync` /
+  `EndMaintenanceAsync`), held around that call alone — the archive taken before it still runs
+  against a live server. Parked is stopped while still wanted running: crash-restart is suppressed
+  for as long as the park holds, and the failure streak and the give-up latch come out of it as they
+  went in.
+- **The release is unconditional**, whatever the update came to, so a window never leaves a server
+  down. A release the watchdog refuses fails the task, because the server is down and the window
+  owes that fact.
+- **One park is one bring-up.** A `restart` standing after an update that parked is already
+  delivered — the release drained and respawned the instance — and is recorded `ok` naming what
+  delivered it rather than bouncing the server a second time.
+- **An instance the watchdog holds stopped is updated without a park** and stays stopped. One that
+  will not park while the watchdog still holds it live is not updated at all.
+- A window carrying `update` announces itself as *"updating and restarting"*, and a container
+  instance declines it for the same reason it declines a restart.
+
 ### Changed — maintenance windows replace the two per-instance cadences (`3.0.0`)
 
 **Breaking: the status socket's shape changes.** One nested run record per window replaces the

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging.Abstractions;
 using TheKrystalShip.KGSM.Core.Scheduling;
 
@@ -11,8 +12,11 @@ public class WindowPlannerTests
 {
     private static readonly TimeZoneInfo Utc = TimeZoneInfo.Utc;
 
-    private static readonly MaintenanceTaskCatalog Catalog = new(
-        [new BackupTask(NullLogger<BackupTask>.Instance), new RestartTask(NullLogger<RestartTask>.Instance)]);
+    private static readonly MaintenanceTaskCatalog Catalog = new([
+        new BackupTask(NullLogger<BackupTask>.Instance),
+        new UpdateTask(Options.Create(new SchedulerOptions()), NullLogger<UpdateTask>.Instance),
+        new RestartTask(NullLogger<RestartTask>.Instance),
+    ]);
 
     private static readonly DateTime T0 = new(2026, 8, 2, 3, 0, 0, DateTimeKind.Utc);
 
@@ -147,18 +151,22 @@ public class WindowPlannerTests
     [Theory]
     [InlineData("daily@04:00/restart")]
     [InlineData("daily@04:00/backup,restart")]
+    [InlineData("weekly.sun@04:00/backup,update,restart")]
     public void A_window_carrying_something_disruptive_reads_fine(string expression) =>
         Assert.True(Read(expression).Valid);
 
-    // A task this daemon does not run is named when the window is read, so an operator hears about
+    // A task the catalog does not hold is named when the window is read, so an operator hears about
     // it the moment they write it rather than a week later.
     [Fact]
     public void A_window_naming_a_task_this_host_does_not_run_is_refused()
     {
-        ReadWindow read = Read("weekly.sun@04:00/update,restart");
+        var partial = new MaintenanceTaskCatalog([new BackupTask(NullLogger<BackupTask>.Instance)]);
+
+        ReadWindow read = WindowPlanner.Read(
+            MaintenanceWindowParser.ParseWindow("weekly.sun@04:00/backup,restart"), partial, 10, Utc, T0);
 
         Assert.False(read.Valid);
-        Assert.Contains("update", read.Error);
+        Assert.Contains("restart", read.Error);
     }
 
     // ---- how far apart the fires are ---------------------------------------

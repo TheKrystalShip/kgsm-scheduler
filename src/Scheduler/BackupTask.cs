@@ -30,7 +30,7 @@ internal sealed class BackupTask(ILogger<BackupTask> logger) : IMaintenanceTask
     /// <summary>Nobody is interrupted by an archive, so a backup-only window is never announced.</summary>
     public bool IsDisruptive => false;
 
-    public Task<TaskGate> GateAsync(Instance instance, IWatchdogClient watchdog, CancellationToken ct) =>
+    public Task<TaskGate> GateAsync(MaintenanceContext ctx, CancellationToken ct) =>
         Task.FromResult(TaskGate.Dispatch);
 
     public async Task<TaskOutcome> RunAsync(MaintenanceContext ctx, CancellationToken ct)
@@ -44,7 +44,7 @@ internal sealed class BackupTask(ILogger<BackupTask> logger) : IMaintenanceTask
 
         if (result.ExitCode != 0)
         {
-            string detail = Summarize(result.Stderr) ?? "the engine gave no detail";
+            string detail = EngineDetail.Summarize(result.Stderr) ?? "the engine gave no detail";
             logger.LogWarning("{Instance}: scheduled backup failed: {Err}", ctx.Name, detail);
             return TaskOutcome.Failed(detail);
         }
@@ -71,24 +71,8 @@ internal sealed class BackupTask(ILogger<BackupTask> logger) : IMaintenanceTask
 
         // The archive is the job and it landed, so this is not a failed backup. It is also not
         // nothing: a rotation that stops running fills a disk quietly, so it travels on the record.
-        string pruneDetail = Summarize(prune.Stderr) ?? "the engine gave no detail";
+        string pruneDetail = EngineDetail.Summarize(prune.Stderr) ?? "the engine gave no detail";
         logger.LogWarning("{Instance}: backup prune failed: {Err}", ctx.Name, pruneDetail);
         return TaskOutcome.Ok($"the archive was taken; the prune failed: {pruneDetail}");
-    }
-
-    /// <summary>
-    /// The failure as one line. kgsm writes several lines of context and the status snapshot is one
-    /// NDJSON line per connection, so the last line — the one naming what went wrong — is what
-    /// travels.
-    /// </summary>
-    internal static string? Summarize(string? stderr)
-    {
-        if (string.IsNullOrWhiteSpace(stderr)) return null;
-
-        string? last = stderr
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .LastOrDefault();
-
-        return string.IsNullOrWhiteSpace(last) ? null : last;
     }
 }

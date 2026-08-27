@@ -4,8 +4,9 @@
 
 `kgsm-scheduler` is a **resident leaf daemon** in the KGSM ecosystem. It reads each
 instance's **maintenance windows** from kgsm (via `kgsm-lib`) and runs them at their
-appointed time — archiving through kgsm and restarting through the watchdog. It also
-sweeps the roster on an interval for newer game builds.
+appointed time — archiving and updating through kgsm, restarting and parking through the
+watchdog. It also sweeps the roster on an interval for newer game builds, which is what
+records the upstream version an update window then acts on.
 
 It is a **leaf**: it depends only on `kgsm-lib` (which reaches `kgsm` and the
 watchdog), never on `kgsm-api` or a sibling leaf. It runs fully standalone,
@@ -44,14 +45,19 @@ its one validator, so the API's preview and this daemon's fires cannot disagree 
 what an expression means. This repo holds only what is its own: whether *this host* will
 fire a window, how far apart its fires are, and how late one may be.
 
-**Tasks run in fixed canonical order — `backup` → `restart` — whatever order they were
-written in.** The correct order is a property of what the tasks are, not of how somebody
-typed them. **A failed task aborts the rest of the window**; the remainder are recorded
+**Tasks run in fixed canonical order — `backup` → `update` → `restart` — whatever order
+they were written in.** The correct order is a property of what the tasks are, not of how
+somebody typed them: a backup taken after an update archives the new build instead of the
+rollback point. **A failed task aborts the rest of the window**; the remainder are recorded
 `aborted`. A partially-run window is worse than a skipped one.
 
-**Nothing holds the instance down.** A backup runs against a live server — kgsm records
-the state an archive was captured in — and a restart is one atomic watchdog transition.
-No task needs a span in which the instance stays stopped, so no window parks one.
+**A park belongs to the task that needs one.** The engine refuses to update a running
+instance, so `update` is the one task that needs a span in which the server stays stopped —
+and it holds that span around the engine call alone. The archive before it runs against a
+live server, because kgsm records the state an archive was captured in. **One park is one
+bring-up:** the release drains and respawns the instance, which is the whole of what a
+restart is, so a `restart` standing after it is already delivered rather than bounced a
+second time.
 
 ## Key files
 
@@ -63,7 +69,7 @@ No task needs a span in which the instance stays stopped, so no window parks one
   A grace guard drops fires too overdue to run (host was down) to prevent catch-up storms.
 - `src/Scheduler/IMaintenanceTask.cs` — the task contract, the gate's tri-state, the
   outcome vocabulary, and the catalog of what this daemon can run.
-- `src/Scheduler/BackupTask.cs` / `RestartTask.cs` — the two tasks.
+- `src/Scheduler/BackupTask.cs` / `UpdateTask.cs` / `RestartTask.cs` — the tasks a window runs.
 - `src/Scheduler/RestartGate.cs` — re-asserts the instance's state through
   `IWatchdogClient.GetStatusAsync` in the instant before a restart is dispatched, and
   abandons unless the watchdog measures the instance as running. See **The restart
@@ -165,13 +171,15 @@ This is a **Native AOT** project (`PublishAot=true`). Constraints: no reflection
 - Window config (`MaintenanceWindows`, `Timezone`, `BackupRetention` on `Instance`) is
   read via `IInstanceService` from `kgsm-lib` — kgsm config is the source of truth, and
   `MaintenanceWindowParser` is the only thing that reads the packed value.
-- Restarts are issued via `IWatchdogClient.RestartAsync` — never shell out to
-  `kgsm.sh` or open the watchdog socket directly.
+- Restarts are issued via `IWatchdogClient.RestartAsync`, and the update's park through
+  `BeginMaintenanceAsync`/`EndMaintenanceAsync` — never shell out to `kgsm.sh` or open the
+  watchdog socket directly.
 - Update availability is **kgsm's fact, not the scheduler's**. The sweep calls
   `check-update --emit` and the engine decides what is worth announcing: it records the
   upstream version beside the instance and emits `instance_update_available` only for one it
   has not announced before. Nothing here compares versions, remembers an answer, or writes an
-  audit row.
+  audit row. The `update` task reads that same record back — through the fast fleet status read,
+  which touches no network — and is the only thing that acts on it.
 
 ## The window run
 
@@ -232,9 +240,35 @@ pruning around a failed one would drop a good archive to make room for something
 written. A prune that refuses does not fail the backup — the archive is the job and it landed
 — but it travels on the record, because a rotation that quietly stops running fills a disk.
 
+**`update`** — applies the newer game build, behind a watchdog park.
+
+- **It dispatches only on the engine's recorded evidence that a newer build stands.** The reading
+  is the one the update-check sweep left beside the instance, answered off disk with no upstream
+  call; anything else — an up-to-date server, an upstream nothing has ever recorded — is a skip
+  with that reason. Asking upstream here would cost a real steamcmd login before every update
+  window, and an update with nothing to do is a server stopped for nothing.
+- **The park is held around the engine call alone**, through
+  `IWatchdogClient.BeginMaintenanceAsync`/`EndMaintenanceAsync`. Parked is stopped while still
+  wanted running: crash-restart is suppressed for as long as the park holds, and the failure
+  streak and the give-up latch come out of it as they went in. A stop/start pair from here would
+  say instead that nobody wants the server up, and would strand it if this daemon died between the
+  two.
+- **The release is unconditional**, whatever the update came to. That is what makes "a window
+  never leaves a server down" a property of the task rather than of the tasks that happen to
+  follow it. A release the watchdog refuses fails the task, because the server is down and the
+  window owes that fact — the watchdog hands the refused respawn to its own restart loop.
+- **An instance the watchdog holds stopped is updated without a park** and stays stopped: nothing
+  will spawn it mid-write, and a server nobody wants running costs no downtime to update. An
+  instance that will not park while the watchdog still holds it live is not updated at all — the
+  engine would refuse it and a supervisor could spawn it out of a directory being rewritten.
+- kgsm takes its own `pre-update` archive inside the update and abandons the update if that
+  archive fails. That guarantee is the engine's, and nothing here duplicates or weakens it.
+
 **`restart`** — `IWatchdogClient.RestartAsync`, one atomic transition the watchdog already
 owns: it drains and respawns without incrementing the crash-recovery streak, and never leaves
-the instance in a state where desired-state says stopped.
+the instance in a state where desired-state says stopped. A restart in a window whose update
+already parked is **already delivered** — the release drained and respawned the instance — so it
+is recorded `ok` naming what delivered it, rather than bouncing the server a second time.
 
 ## What this host will fire
 

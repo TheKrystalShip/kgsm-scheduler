@@ -163,7 +163,7 @@ internal sealed class UpdateCheckSweep(
             {
                 LastUpdateCheckUtc = DateTimeOffset.UtcNow,
                 LastUpdateCheckOk = ok,
-                LastUpdateCheckMessage = ok ? null : Summarize(result.Stderr),
+                LastUpdateCheckMessage = ok ? null : EngineDetail.Summarize(result.Stderr),
             });
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -180,21 +180,5 @@ internal sealed class UpdateCheckSweep(
                 LastUpdateCheckMessage = ex.Message,
             });
         }
-    }
-
-    /// <summary>
-    /// The failure as one line for the status snapshot. kgsm writes several lines of context on a
-    /// failed check; the snapshot is served as one NDJSON line per connection, so the last line —
-    /// the one naming what actually went wrong — is what travels.
-    /// </summary>
-    internal static string? Summarize(string? stderr)
-    {
-        if (string.IsNullOrWhiteSpace(stderr)) return null;
-
-        string? last = stderr
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .LastOrDefault();
-
-        return string.IsNullOrWhiteSpace(last) ? null : last;
     }
 }

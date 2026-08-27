@@ -77,6 +77,7 @@ internal sealed class Program
         // Every task this daemon can run, and the pieces the window run is assembled from. A task is
         // stateless, so one instance of each serves the whole host.
         builder.Services.AddSingleton<IMaintenanceTask, BackupTask>();
+        builder.Services.AddSingleton<IMaintenanceTask, UpdateTask>();
         builder.Services.AddSingleton<IMaintenanceTask, RestartTask>();
         builder.Services.AddSingleton<MaintenanceTaskCatalog>();
         builder.Services.AddSingleton<WindowAnnouncer>();

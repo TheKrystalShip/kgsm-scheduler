@@ -33,7 +33,7 @@ Panel renders). A test fails the build if any of the three is missing one of the
 | `Scheduler:GraceWindowMinutes` | `Scheduler__GraceWindowMinutes` | `10` | How late a missed maintenance window may be and still run. Anything later is skipped, so a host that was down does not come back to a burst of catch-up work. Capped at half the window's own period, and floored at one poll interval — see below. |
 | `Scheduler:MinimumWindowPeriodMinutes` | `Scheduler__MinimumWindowPeriodMinutes` | `10` | The shortest period this host permits a maintenance window to have. A window asking to run more often is reported as one this host will not fire, with that reason. Anything below 10 is raised to 10 — the grammar's own floor, which a host policy cannot undercut. |
 | `Scheduler:AllowDisruptiveTasks` | `Scheduler__AllowDisruptiveTasks` | `true` | Whether maintenance that interrupts the people on a server may run on this host at all. False leaves backups running as normal; anything disruptive is recorded as skipped with that reason, and the windows carrying it are not announced. |
-| `Scheduler:UpdateCheckEnabled` | `Scheduler__UpdateCheckEnabled` | `true` | Whether to sweep every server for a newer game build. False means nothing on this host ever asks upstream, so no update is announced. |
+| `Scheduler:UpdateCheckEnabled` | `Scheduler__UpdateCheckEnabled` | `true` | Whether to sweep every server for a newer game build. False means nothing on this host ever asks upstream, so no update is announced — and an `update` task, which dispatches only on a recorded upstream version, is skipped with that reason. |
 | `Scheduler:UpdateCheckIntervalMinutes` | `Scheduler__UpdateCheckIntervalMinutes` | `60` | How often the whole roster is swept. Each server asks its own upstream, so the cost is linear in servers. Anything below 5 is raised to 5. |
 | `Scheduler:UpdateCheckStaggerSeconds` | `Scheduler__UpdateCheckStaggerSeconds` | `5` | Pause between one server's check and the next. The sweep is serial by design; this spreads the requests out further. Zero checks back to back. |
 | `Logging:LogLevel:Default` | `Logging__LogLevel__Default` | `Information` | Minimum severity logged, to the journal. |
@@ -62,7 +62,7 @@ kgsm config and is read fresh on every poll:
 
 | key | what |
 |---|---|
-| `maintenance_windows` | the windows themselves, packed — `daily@05:00/backup;weekly.sun@04:00/backup,restart` |
+| `maintenance_windows` | the windows themselves, packed — `daily@05:00/backup;weekly.sun@04:00/backup,update,restart` |
 | `timezone` | the IANA zone an appointment's time of day is read in. Intervals ignore it |
 | `backup_retention` | how many prunable archives a `backup` task keeps |
 | `announce_lead_minutes` | the lead times a window is announced at, e.g. `15,5,1` |

@@ -52,18 +52,43 @@ internal readonly record struct TaskOutcome(string Outcome, string? Message)
     public static TaskOutcome Skipped(string reason) => new(MaintenanceOutcomes.Skipped, reason);
 }
 
+/// <summary>
+/// What the tasks of one window run have already done to the instance between them.
+/// </summary>
+/// <remarks>
+/// Tasks are stateless singletons serving every instance on the host, so the one thing a task needs
+/// to know about the task before it lives here, on the run.
+/// </remarks>
+internal sealed class WindowProgress
+{
+    /// <summary>
+    /// Whether the instance has already been drained and brought back up inside this window.
+    /// </summary>
+    /// <remarks>
+    /// Set from the measured release, never from having asked for one: a park whose release the
+    /// watchdog refused left the instance down, and reading that as a delivered bounce would report
+    /// a restart nobody got.
+    /// </remarks>
+    public bool InstanceCycled { get; private set; }
+
+    /// <summary>Records that the instance went down and came back within this run.</summary>
+    public void MarkCycled() => InstanceCycled = true;
+}
+
 /// <summary>Everything a task needs to do its work, and nothing about the tasks beside it.</summary>
 /// <param name="Name">The instance's id, as kgsm and the watchdog know it.</param>
 /// <param name="Instance">The instance's configuration, read on the tick that scheduled this run.</param>
 /// <param name="Window">The window this run belongs to.</param>
 /// <param name="Instances">The engine.</param>
 /// <param name="Watchdog">The daemon every disruptive act is issued through.</param>
+/// <param name="Progress">What the tasks before this one already did to the instance.</param>
 internal sealed record MaintenanceContext(
     string Name,
     Instance Instance,
     MaintenanceWindow Window,
     IInstanceService Instances,
-    IWatchdogClient Watchdog);
+    IWatchdogClient Watchdog,
+    WindowProgress Progress);
 
 /// <summary>
 /// One unit of work a maintenance window performs against an instance.
@@ -101,10 +126,9 @@ internal interface IMaintenanceTask
     /// Decides, immediately before dispatch, whether this task still applies to the instance in
     /// front of it.
     /// </summary>
-    /// <param name="instance">The instance, as its configuration stands.</param>
-    /// <param name="watchdog">The daemon holding what the instance is actually doing.</param>
+    /// <param name="ctx">The instance, the window, and what the tasks before this one have done.</param>
     /// <param name="ct">Cancels the request.</param>
-    Task<TaskGate> GateAsync(Instance instance, IWatchdogClient watchdog, CancellationToken ct);
+    Task<TaskGate> GateAsync(MaintenanceContext ctx, CancellationToken ct);
 
     /// <summary>Does the work.</summary>
     /// <param name="ctx">The instance, the window, and the services to act through.</param>

@@ -34,14 +34,37 @@ internal sealed class WatchdogClientStub : IWatchdogClient
         Reason = "",
     };
 
+    /// <summary>Builds a state nothing will spawn: held stopped, with no live process.</summary>
+    public static WatchdogInstanceState Stopped(string name = "factorio-01") => new()
+    {
+        Name = name,
+        Desired = "stopped",
+        Phase = "stopped",
+        Populated = false,
+        Restarts = 0,
+        Reason = "",
+    };
+
     /// <summary>How many times the gate asked for a state — a container never gets that far.</summary>
     public int StatusCalls { get; private set; }
 
     /// <summary>Every restart this stub was told to perform.</summary>
     public List<string> Restarts { get; } = [];
 
+    /// <summary>
+    /// Where every lifecycle verb is recorded, in order. Point it at the engine stub's own list to
+    /// read the order of both — which is what a park bracketing an engine call looks like.
+    /// </summary>
+    public List<string> Calls { get; set; } = [];
+
     /// <summary>Whether the next restart is refused.</summary>
     public bool RefuseRestart { get; set; }
+
+    /// <summary>Whether the next park is refused, and what it says.</summary>
+    public bool RefusePark { get; set; }
+
+    /// <summary>Whether the next release is refused, and what it says.</summary>
+    public bool RefuseRelease { get; set; }
 
     /// <summary>Players the roster reports, or null for an instance the daemon cannot observe.</summary>
     public IReadOnlyDictionary<string, WatchdogInstancePresence>? Presence { get; set; }
@@ -60,11 +83,36 @@ internal sealed class WatchdogClientStub : IWatchdogClient
         string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default)
     {
         Restarts.Add(instanceName);
+        Calls.Add($"restart:{instanceName}:{origin}");
         return Task.FromResult(new WatchdogActionResult
         {
             Instance = instanceName,
             Ok = !RefuseRestart,
             Message = RefuseRestart ? "the instance is not running" : "restarted",
+        });
+    }
+
+    public Task<WatchdogActionResult> BeginMaintenanceAsync(
+        string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default)
+    {
+        Calls.Add($"park:{instanceName}:{origin}");
+        return Task.FromResult(new WatchdogActionResult
+        {
+            Instance = instanceName,
+            Ok = !RefusePark,
+            Message = RefusePark ? "not running — nothing to park" : "parked for maintenance (scheduler)",
+        });
+    }
+
+    public Task<WatchdogActionResult> EndMaintenanceAsync(
+        string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default)
+    {
+        Calls.Add($"release:{instanceName}:{origin}");
+        return Task.FromResult(new WatchdogActionResult
+        {
+            Instance = instanceName,
+            Ok = !RefuseRelease,
+            Message = RefuseRelease ? "respawn failed (the node is full)" : "released from maintenance (scheduler)",
         });
     }
 
@@ -79,8 +127,6 @@ internal sealed class WatchdogClientStub : IWatchdogClient
     public Task<WatchdogReadyState?> GetReadyAsync(CancellationToken cancellationToken = default) => Unused<Task<WatchdogReadyState?>>();
     public Task<WatchdogActionResult> StartAsync(string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
     public Task<WatchdogActionResult> StopAsync(string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<WatchdogActionResult> BeginMaintenanceAsync(string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<WatchdogActionResult> EndMaintenanceAsync(string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
     public Task<WatchdogActionResult> EnableAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
     public Task<WatchdogActionResult> DisableAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
     public Task<IReadOnlyList<string>> GetEnabledNamesAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<string>>>();
