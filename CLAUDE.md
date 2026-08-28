@@ -289,7 +289,7 @@ declined with that reason while the `backup` written beside it in the same windo
 is declined rather than failed because nothing was owed — the restart was never going to happen —
 and because failing would abort the rest of the window.
 
-⚠ This daemon is the runtime backstop, not the only check. The API refuses an impossible window
+This daemon is the runtime backstop, not the only check. The API refuses an impossible window
 when somebody writes it; every other writer — the CLI, the assistant, a script — reaches kgsm
 directly, and this is what stands behind them.
 
@@ -298,7 +298,7 @@ windows firing. It appears in the snapshot as `valid: false` with its `error` an
 `nextFireUtc` — never absent, and the two together are what distinguish it from a window that
 is simply not due.
 
-⚠ It also degrades the leaf's **`config`** component, alongside `watchdog` and `kgsm`. This
+It also degrades the leaf's **`config`** component, alongside `watchdog` and `kgsm`. This
 leaf fails more quietly than any other in the ecosystem: everything it does is something that
 was supposed to happen, so maintenance that never runs produces no event and no absence anybody
 notices. Degrading is what makes "there is maintenance here that is never going to happen" a
@@ -354,7 +354,7 @@ about a nightly archive that interrupts nobody.
 **The bookkeeping is keyed `(instance, window)`.** One instance can have two windows counting down at
 once, and each is announced about, and retracted, on its own.
 
-⚠ **A lead at or above a window's own period is dropped, and the drop is reported.** The smallest
+**A lead at or above a window's own period is dropped, and the drop is reported.** The smallest
 due mark is the only true one of several — but that holds because marks come due in descending
 order, and they only do so while the period exceeds the largest lead. On a ten-minute window with
 leads `15,5,1`, the first tick after a fire already has 15 due, so the server would be told
@@ -385,13 +385,13 @@ another window, and the target moving under a postponement, a skip or an edited 
 followed by silence is worse than no warning: players leave for a restart that never comes and nothing
 tells them otherwise.
 
-⚠ **A server with nobody on it is not announced to — but only when the watchdog can actually see its
+**A server with nobody on it is not announced to — but only when the watchdog can actually see its
 players.** `GetPlayerPresenceAsync` reporting `IsDetected` with an empty roster is a measured
 absence. An unreachable daemon, an untracked instance, or one whose players cannot be observed at all
 are each announced to anyway: "no players detected" and "detection unavailable" are different facts,
 and reading the second as the first silences a server full of people.
 
-⚠ **Delivered means the engine wrote to the console, never that a person read it.**
+**Delivered means the engine wrote to the console, never that a person read it.**
 
 ## Status socket
 
@@ -431,7 +431,7 @@ daemon started — the record lives in memory, not on disk.
 The snapshot is rebuilt by the engine's tick, so an outcome written by a run that finishes between
 ticks appears at the next one — up to `PollIntervalSeconds` later.
 
-⚠ `lastUpdateCheckUtc` is **the sweep's own attempt**, not when the upstream was last
+`lastUpdateCheckUtc` is **the sweep's own attempt**, not when the upstream was last
 fetched. A server skipped as recently-checked is null here while the engine holds a real
 `checked_at` for it, and a failed attempt has a time here with no new `checked_at` there. A
 surface answering *"when was this last checked for updates"* wants the engine's `checked_at`
@@ -480,7 +480,7 @@ warnings already given and announces the new countdown from scratch. What persis
 of this daemon is only what was *said*, never the schedule — so the deferred fire coming back also
 brings back an unannounced countdown, announced afresh.
 
-⚠ **The daemon enforces no authorization here, and the shipped command manifest says so** (`gates`
+**The daemon enforces no authorization here, and the shipped command manifest says so** (`gates`
 bucket `none`). A unix socket carries no identity; the only restriction is the filesystem permission
 on the socket — the same posture as the status socket. A caller that wants a tier check owes it
 itself — `kgsm-api` gates its buttons at operator before it dials this.

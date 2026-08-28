@@ -51,7 +51,7 @@ internal static class AnnouncementPlan
     /// <param name="period">The span between one fire of the window and the next.</param>
     /// <param name="dropped">The leads this window cannot honour, largest first.</param>
     /// <remarks>
-    /// ⚠ <b>A lead at or above the window's own period is a false statement waiting to be made.</b>
+    /// <b>A lead at or above the window's own period is a false statement waiting to be made.</b>
     /// <see cref="NextMark"/> speaks the smallest mark that has come due, which is the only true
     /// one of several — but that holds because marks come due in descending order, and they only do
     /// so while the period exceeds the largest lead. On a ten-minute window with leads 15, 5 and 1,
@@ -89,7 +89,7 @@ internal static class AnnouncementPlan
     /// The mark to say out loud, or <see langword="null"/> when nothing is due.
     /// </returns>
     /// <remarks>
-    /// ⚠ <b>Several marks can fall due at once</b> — a daemon that was down, or a tick that ran
+    /// <b>Several marks can fall due at once</b> — a daemon that was down, or a tick that ran
     /// long, arrives to find 15, 5 and 1 all passed. Speaking all three would tell players the
     /// server restarts in fifteen minutes when it restarts in one. The <em>smallest</em> due mark
     /// is the only true statement of the three, so it is the one spoken and the rest are marked

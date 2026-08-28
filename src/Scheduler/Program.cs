@@ -63,7 +63,7 @@ internal sealed class Program
         builder.Services.AddKgsmWatchdogClient(options.WatchdogSocketPath);
 
         // This daemon's own event journal. It records nothing about game servers — the watchdog owns
-        // that — only what this leaf did and whether it can still do it. ⚠ That matters more here than
+        // that — only what this leaf did and whether it can still do it. That matters more here than
         // anywhere else in the ecosystem: everything this daemon does is something that was supposed to
         // happen, so a broken scheduler produces no event, no error and no absence anybody notices.
         builder.Services.AddKgsmJournal("kgsm-scheduler", typeof(Program).Assembly);

@@ -208,7 +208,7 @@ internal sealed class WindowAnnouncer(
     /// Whether the watchdog can see this instance's players and reports none connected.
     /// </summary>
     /// <remarks>
-    /// ⚠ Returns <see langword="false"/> whenever the answer is not a measured empty roster — an
+    /// Returns <see langword="false"/> whenever the answer is not a measured empty roster — an
     /// unreachable daemon, an instance it does not track, or one whose players it cannot observe at
     /// all. Every one of those means "announce anyway": an unobservable server is not an empty one,
     /// and treating it as empty is how a full server gets restarted without warning.

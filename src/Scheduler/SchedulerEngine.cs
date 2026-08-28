@@ -59,7 +59,7 @@ internal sealed class SchedulerEngine(
     /// Reports whether the watchdog is reachable, on every poll rather than when a window is due.
     /// </summary>
     /// <remarks>
-    /// ⚠ By the time a window comes due somebody is already waiting for a restart that will not
+    /// By the time a window comes due somebody is already waiting for a restart that will not
     /// happen. Probing on the tick is what turns the most silent failure in this ecosystem into one
     /// that announces itself. The probe is a request on a unix socket, which is why it is affordable
     /// at this cadence.

@@ -64,7 +64,7 @@ maintenance_windows="daily@05:00/backup;weekly.sun@04:00/backup,restart"
   makes "which part failed" answerable.
 - **Announcements are per window** and carry a `{reason}` token beside `{minutes}` and `{instance}`,
   through `announce_maintenance_message`. A window with nothing disruptive in it is never announced.
-  ⚠ A lead at or above a window's own period is dropped, and the drop is reported: on a ten-minute
+  A lead at or above a window's own period is dropped, and the drop is reported: on a ten-minute
   window a fifteen-minute warning would be spoken nine minutes before the fire it describes.
 - **Grace is relative to the window**, capped at half its period and floored at one poll, so a
   frequent window can never have two occurrences owed at once.
@@ -107,11 +107,11 @@ the engine then substitutes that into the game's own broadcast template.
   server is told so with `announce_restart_cancelled_message`. A warning followed by silence sends
   players away for a restart that never comes.
 - **A server with nobody on it is not announced to**, when the watchdog can actually see its players.
-  ⚠ An instance whose players it cannot observe is announced to anyway: "no players detected" and
+  An instance whose players it cannot observe is announced to anyway: "no players detected" and
   "detection unavailable" are different facts, and reading the second as the first silences a full
   server.
 
-⚠ A delivered announcement means the engine wrote to the console, never that a person read it.
+A delivered announcement means the engine wrote to the console, never that a person read it.
 
 
 ### Changed — a scheduled restart re-asserts the instance's state before it dispatches (`2.11.0`)
@@ -130,7 +130,7 @@ is `false` for a restart that was owed and did not happen — an unreachable wat
 instance, which this daemon cannot dispatch to at all — and `null` for one that does not apply,
 where declining is the correct outcome and a red row would be wrong.
 
-⚠ An unreachable watchdog is never read as "not running". It abandons with the state stated as
+An unreachable watchdog is never read as "not running". It abandons with the state stated as
 unknown, which is a different sentence from the one written for an instance the watchdog answers
 about and does not supervise.
 
@@ -170,7 +170,7 @@ rewrite **detectable** — a reference carrying both finds the line by position 
 right one by id, where before a shifted offset resolved to a real, parseable event of the wrong kind
 with nothing to notice.
 
-⚠ Optional and optional forever: lines written before this are on disk for as long as retention holds
+Optional and optional forever: lines written before this are on disk for as long as retention holds
 them, and **absent means unknown, never a mismatch**. Authority: `journal-entry-id-plan.md`.
 
 ### Changed — a scheduled backup says a cadence took it
@@ -197,7 +197,7 @@ plus one `manage-units` call on this project's own service — `start` when the 
 is not running). Both are dispatched as the same `manage-units` action, so a host without the grant is
 refused either way and the probe measures the grant rather than the unit.
 
-⚠ Measured in the positive direction only. The deploying user on the development host is in
+Measured in the positive direction only. The deploying user on the development host is in
 `wheel`, and two pre-existing polkit rules there grant that group every
 `org.freedesktop.systemd1.*` action outright, so no systemctl call by that user can be refused
 and the negative path cannot be exercised on it. That `try-restart` consults polkit before it
@@ -219,7 +219,7 @@ costs nothing meanwhile.
 
 `0750` with `Group=kgsm` rather than `0700`, because a producer's journal is read by every other
 component on the host and a directory cannot be entered without execute on every directory above it.
-⚠ A state directory closed to the group hides the journal inside it **silently** — a reader that
+A state directory closed to the group hides the journal inside it **silently** — a reader that
 cannot traverse in sees no journal rather than a permission error, which is indistinguishable from a
 leaf that has recorded nothing.
 
@@ -292,12 +292,12 @@ The move is applied under the registry's lock, so a tick landing mid-write canno
 target with the one it read a moment ago, and it survives ticks because a postponement does not change
 the plan's signature — which is what `Plan()` keys a standing target on.
 
-⚠ **The daemon enforces no authorization here, and the shipped command manifest says so** (`gates`
+**The daemon enforces no authorization here, and the shipped command manifest says so** (`gates`
 bucket `none`). A unix socket carries no identity; the only restriction is the filesystem permission
 on it, the same posture the status socket has always had. A caller wanting a tier check owes it
 itself.
 
-⚠ **A postponement does not survive a restart of this daemon** — the standing target is in memory, so
+**A postponement does not survive a restart of this daemon** — the standing target is in memory, so
 a restart recomputes it from config and the deferred fire returns. The honest consequence of not
 editing the schedule.
 

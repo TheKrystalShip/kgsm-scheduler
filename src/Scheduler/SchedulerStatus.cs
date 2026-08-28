@@ -70,7 +70,7 @@ internal sealed record SchedulerWindowStatus(
 
 /// <summary>One server's maintenance, as this daemon holds it.</summary>
 /// <remarks>
-/// ⚠ The three update-check fields are <b>the sweep's own attempt</b>, not when the upstream was
+/// The three update-check fields are <b>the sweep's own attempt</b>, not when the upstream was
 /// last fetched. A server skipped as recently-checked is null here while the engine holds a real
 /// <c>checked_at</c> for it, and a failed attempt has a time here with no new <c>checked_at</c>
 /// there. They answer "is the sweep working, and what failed".

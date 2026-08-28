@@ -138,7 +138,7 @@ internal interface IMaintenanceTask
 
 /// <summary>Who this daemon acts as when it drives the engine or the watchdog.</summary>
 /// <remarks>
-/// ⚠ Every provenance-aware verb takes these. Omitting them attributes an unattended maintenance
+/// Every provenance-aware verb takes these. Omitting them attributes an unattended maintenance
 /// run to whoever owns this process, and the audit trail then reads as a person having asked.
 /// </remarks>
 internal static class Provenance

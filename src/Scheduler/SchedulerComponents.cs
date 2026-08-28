@@ -5,7 +5,7 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⚠ <b>This leaf fails more quietly than any other in the ecosystem.</b> Everything it does is
+/// <b>This leaf fails more quietly than any other in the ecosystem.</b> Everything it does is
 /// something that was supposed to happen and did not: a restart that never fires produces no event, no
 /// error and no absence anybody notices, because the only evidence would have been a server going down
 /// and coming back. Nothing on this host can tell a scheduler that is idle from one that is broken.

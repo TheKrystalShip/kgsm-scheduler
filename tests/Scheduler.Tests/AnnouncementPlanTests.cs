@@ -43,7 +43,7 @@ public class AnnouncementPlanTests
 
     // --- leads a window is too frequent to honour ------------------------------------------
 
-    // ⚠ NextMark speaks the smallest due mark because marks come due in descending order — which
+    // NextMark speaks the smallest due mark because marks come due in descending order — which
     // holds only while the period exceeds the largest lead. On a ten-minute window the first tick
     // after a fire already has 15 due, and the server would be told "in 15 minutes" nine minutes
     // before it happens, every time.

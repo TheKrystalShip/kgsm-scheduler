@@ -11,7 +11,7 @@
 # packaging time is a unit nobody tested.
 
 pkgname=kgsm-scheduler
-pkgver=2.10.0
+pkgver=3.2.0
 pkgrel=1
 pkgdesc="KGSM scheduler — scheduled restarts, backups and update sweeps"
 arch=('x86_64')
