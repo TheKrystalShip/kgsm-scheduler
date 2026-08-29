@@ -4,6 +4,13 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Fixed — the descriptor names this leaf's unit, not a path to it (3.2.1)
+
+The `systemd-unit` floor source names `kgsm-scheduler.service`. Where that file sits is a property of how the host was
+provisioned — `/usr/lib/systemd/system` when a package installed it, `/etc` when a deploy script placed
+it — and this leaf cannot know which, so naming one of them made the Control Panel report every value
+this unit sets as unknown on the other kind of host.
+
 ### Changed — an event is named by a type (`3.2.0`)
 
 An event's name is a type rather than a string, so a name that is not a name cannot reach the journal.

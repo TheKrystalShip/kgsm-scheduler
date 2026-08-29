@@ -20,7 +20,7 @@ using TheKrystalShip.KGSM.LeafConfig;
 
 // Lowest precedence first — the same order the daemon resolves them in.
 [assembly: LeafFloorSource("appsettings", "/opt/kgsm-scheduler/kgsm-scheduler.settings.json")]
-[assembly: LeafFloorSource("systemd-unit", "/etc/kgsm-scheduler/systemd/kgsm-scheduler.service")]
+[assembly: LeafFloorSource("systemd-unit", "kgsm-scheduler.service")]
 [assembly: LeafFloorSource("env-file", "/etc/kgsm-scheduler/kgsm-scheduler.env")]
 
 [assembly: LeafFrameworkNamespace("Logging__",

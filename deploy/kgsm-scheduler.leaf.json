@@ -13,7 +13,7 @@
     },
     {
       "kind": "systemd-unit",
-      "path": "/etc/kgsm-scheduler/systemd/kgsm-scheduler.service"
+      "path": "kgsm-scheduler.service"
     },
     {
       "kind": "env-file",
