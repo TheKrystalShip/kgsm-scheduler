@@ -1,4 +1,4 @@
-using TheKrystalShip.KGSM.LeafConfig;
+using TheKrystalShip.KGSM.ComponentConfig;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -25,7 +25,7 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 /// number still fails loudly, which is the point of typing it at all.
 /// </para>
 /// </remarks>
-[LeafSection(Section)]
+[ConfigSection(Section)]
 internal sealed class SchedulerSettings
 {
     /// <summary>The configuration section this type binds to.</summary>
@@ -35,30 +35,30 @@ internal sealed class SchedulerSettings
     /// the daemon refuses to run if nothing is there.</summary>
     /// <panel>Path to the KGSM executable, which the scheduler reads each server's schedule from. It is
     /// checked at startup, and the daemon refuses to run if nothing is there.</panel>
-    [LeafField("kgsmPath", "KGSM executable", Group = "wiring", Type = LeafType.Path, Risk = LeafRisk.Wiring)]
+    [ConfigField("kgsmPath", "KGSM executable", Group = "wiring", Type = ConfigType.Path, Risk = ConfigRisk.Wiring)]
     public string KgsmPath { get; set; } = "/usr/bin/kgsm";
 
     /// <summary>The watchdog control socket every scheduled restart is issued through. It has to
     /// match the path the watchdog listens on, or nothing scheduled ever fires.</summary>
     /// <panel>The watchdog's control socket, which every scheduled restart is issued through. It has to
     /// match the path the watchdog listens on, or nothing scheduled ever fires.</panel>
-    [LeafField("watchdogSocket", "Watchdog control socket", Group = "wiring", Type = LeafType.Path,
-        Risk = LeafRisk.Wiring)]
+    [ConfigField("watchdogSocket", "Watchdog control socket", Group = "wiring", Type = ConfigType.Path,
+        Risk = ConfigRisk.Wiring)]
     public string WatchdogSocketPath { get; set; } = "/run/kgsm-watchdog/control.sock";
 
     /// <summary>Unix socket the schedule snapshot is served on, one NDJSON line per connection.</summary>
     /// <panel>Unix socket the scheduler serves its schedule snapshot on. The Control Panel reads it here
     /// to show what is scheduled and when it last ran.</panel>
-    [LeafField("statusSocket", "Status socket", Group = "wiring", Type = LeafType.Path,
-        Risk = LeafRisk.Wiring, PairedApiKey = "Api__SchedulerSocketPath")]
+    [ConfigField("statusSocket", "Status socket", Group = "wiring", Type = ConfigType.Path,
+        Risk = ConfigRisk.Wiring, PairedApiKey = "Api__SchedulerSocketPath")]
     public string StatusSocketPath { get; set; } = "/run/kgsm-scheduler/status.sock";
 
     /// <summary>Unix socket the scheduler takes instructions on, one NDJSON request and one reply per
     /// connection. Separate from the status socket, whose contract is that a client only ever reads.</summary>
     /// <panel>Unix socket the scheduler takes instructions on — postponing a scheduled restart, for
     /// instance. Separate from the status socket, which is read-only.</panel>
-    [LeafField("controlSocket", "Control socket", Group = "wiring", Type = LeafType.Path,
-        Risk = LeafRisk.Wiring, PairedApiKey = "Api__SchedulerControlSocketPath")]
+    [ConfigField("controlSocket", "Control socket", Group = "wiring", Type = ConfigType.Path,
+        Risk = ConfigRisk.Wiring, PairedApiKey = "Api__SchedulerControlSocketPath")]
     public string ControlSocketPath { get; set; } = "/run/kgsm-scheduler/control.sock";
 
     /// <summary>Directory this daemon keeps state in that must survive a restart of it — which
@@ -66,15 +66,15 @@ internal sealed class SchedulerSettings
     /// <panel>Directory the scheduler keeps its own state in. It remembers which servers have already
     /// been told a restart is coming, so a restart of the scheduler does not repeat the warnings or
     /// forget that it promised them.</panel>
-    [LeafField("stateDirectory", "State directory", Group = "wiring", Type = LeafType.Path,
-        Risk = LeafRisk.Wiring)]
+    [ConfigField("stateDirectory", "State directory", Group = "wiring", Type = ConfigType.Path,
+        Risk = ConfigRisk.Wiring)]
     public string StateDirectory { get; set; } = "/var/lib/kgsm-scheduler";
 
     /// <summary>How often each server's schedule is re-read from KGSM (seconds). Raised to
     /// <see cref="SchedulerOptions.MinPollIntervalSeconds"/> if lower.</summary>
     /// <panel>How often each server's schedule is re-read from KGSM. This bounds how quickly a schedule
     /// change takes effect; it does not affect the accuracy of a fire that is already scheduled.</panel>
-    [LeafField("pollIntervalSec", "Schedule re-scan interval", Group = "timing",
+    [ConfigField("pollIntervalSec", "Schedule re-scan interval", Group = "timing",
         Min = SchedulerOptions.MinPollIntervalSeconds, Unit = "s")]
     public int? PollIntervalSeconds { get; set; }
 
@@ -84,7 +84,7 @@ internal sealed class SchedulerSettings
     /// host that was down does not come back to a burst of catch-up work. A window that comes round more
     /// often than twice this gets half its own period instead, so a frequent window can never have two
     /// occurrences owed at once.</panel>
-    [LeafField("graceWindowMin", "Missed-fire grace window", Group = "timing", Min = 0, Unit = "min")]
+    [ConfigField("graceWindowMin", "Missed-fire grace window", Group = "timing", Min = 0, Unit = "min")]
     public int? GraceWindowMinutes { get; set; }
 
     /// <summary>The shortest period this host permits a maintenance window to have (minutes). A window
@@ -92,7 +92,7 @@ internal sealed class SchedulerSettings
     /// <panel>How often maintenance is allowed to happen at all on this host. A window asking to run more
     /// frequently than this is reported as one that will not fire, rather than firing anyway — the floor
     /// is the host's answer, not the server's.</panel>
-    [LeafField("minWindowPeriodMin", "Minimum window period", Group = "policy",
+    [ConfigField("minWindowPeriodMin", "Minimum window period", Group = "policy",
         Min = SchedulerOptions.MinWindowPeriodMinutes, Unit = "min")]
     public int? MinimumWindowPeriodMinutes { get; set; }
 
@@ -102,8 +102,8 @@ internal sealed class SchedulerSettings
     /// run on this host at all. Off leaves backups running as normal; anything disruptive is recorded as
     /// skipped and the windows carrying it are not announced, since there would be nothing true to
     /// announce.</panel>
-    [LeafField("allowDisruptiveTasks", "Allow disruptive maintenance", Group = "policy",
-        Type = LeafType.Bool)]
+    [ConfigField("allowDisruptiveTasks", "Allow disruptive maintenance", Group = "policy",
+        Type = ConfigType.Bool)]
     public bool? AllowDisruptiveTasks { get; set; }
 
     /// <summary>Whether to sweep every server for a newer game build. Off means nothing on this host
@@ -111,20 +111,20 @@ internal sealed class SchedulerSettings
     /// <panel>Whether to check each server for a newer game build. Turning this off means nothing on
     /// this host ever asks upstream, so no update notification is raised — servers keep running
     /// exactly as they are.</panel>
-    [LeafField("updateCheckEnabled", "Check for game updates", Group = "updates", Type = LeafType.Bool)]
+    [ConfigField("updateCheckEnabled", "Check for game updates", Group = "updates", Type = ConfigType.Bool)]
     public bool? UpdateCheckEnabled { get; set; }
 
     /// <summary>How often the whole roster is swept for updates (minutes). Raised to
     /// <see cref="SchedulerOptions.MinUpdateCheckIntervalMinutes"/> if lower.</summary>
     /// <panel>How often every server is checked for a newer build. A game release is not a fast-moving
     /// fact and each check costs a real request to the game's upstream, so hourly is generous.</panel>
-    [LeafField("updateCheckIntervalMin", "Update check interval", Group = "updates",
+    [ConfigField("updateCheckIntervalMin", "Update check interval", Group = "updates",
         Min = SchedulerOptions.MinUpdateCheckIntervalMinutes, Unit = "min")]
     public int? UpdateCheckIntervalMinutes { get; set; }
 
     /// <summary>Pause between one server's update check and the next, within a sweep (seconds).</summary>
     /// <panel>How long to wait between checking one server and the next. Each server asks its own
     /// upstream, so this spreads the requests out instead of sending them all in the same second.</panel>
-    [LeafField("updateCheckStaggerSec", "Update check stagger", Group = "updates", Min = 0, Unit = "s")]
+    [ConfigField("updateCheckStaggerSec", "Update check stagger", Group = "updates", Min = 0, Unit = "s")]
     public int? UpdateCheckStaggerSeconds { get; set; }
 }
