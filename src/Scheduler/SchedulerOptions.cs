@@ -24,8 +24,12 @@ internal sealed class SchedulerOptions
 
     public string KgsmPath { get; init; } = "/usr/bin/kgsm";
     public string WatchdogSocketPath { get; init; } = "/run/kgsm-watchdog/control.sock";
-    public string StatusSocketPath { get; init; } = "/run/kgsm-scheduler/status.sock";
-    public string ControlSocketPath { get; init; } = "/run/kgsm-scheduler/control.sock";
+    /// <summary>Where this daemon serves its schedule snapshot and its verbs.</summary>
+    public string SocketPath { get; init; } = "/run/kgsm-scheduler/scheduler.sock";
+    /// <summary>Where this daemon serves its own surface.</summary>
+    public string SurfaceSocketPath { get; init; } = "/run/kgsm-scheduler/surface.sock";
+    /// <summary>Where a configuration change made through the Control Panel is written.</summary>
+    public string ConfigOverridePath { get; init; } = "/var/lib/kgsm-api/leaf-overrides/scheduler.env";
     public string StateDirectory { get; init; } = "/var/lib/kgsm-scheduler";
     /// <summary>How often to re-scan instance schedule config (seconds). At least <see cref="MinPollIntervalSeconds"/>.</summary>
     public int PollIntervalSeconds { get; init; } = 60;
@@ -77,8 +81,9 @@ internal sealed class SchedulerOptions
         {
             KgsmPath = Or(s.KgsmPath, defaults.KgsmPath),
             WatchdogSocketPath = Or(s.WatchdogSocketPath, defaults.WatchdogSocketPath),
-            StatusSocketPath = Or(s.StatusSocketPath, defaults.StatusSocketPath),
-            ControlSocketPath = Or(s.ControlSocketPath, defaults.ControlSocketPath),
+            SocketPath = Or(s.SocketPath, defaults.SocketPath),
+            SurfaceSocketPath = Or(s.SurfaceSocketPath, defaults.SurfaceSocketPath),
+            ConfigOverridePath = Or(s.ConfigOverridePath, defaults.ConfigOverridePath),
             StateDirectory = Or(s.StateDirectory, defaults.StateDirectory),
             PollIntervalSeconds = Math.Max(s.PollIntervalSeconds ?? defaults.PollIntervalSeconds, MinPollIntervalSeconds),
             GraceWindowMinutes = Math.Max(s.GraceWindowMinutes ?? defaults.GraceWindowMinutes, 0),

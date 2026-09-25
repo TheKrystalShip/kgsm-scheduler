@@ -18,14 +18,18 @@
     // never directly, so this has to match the path the watchdog listens on.
     "WatchdogSocketPath": "/run/kgsm-watchdog/control.sock",
 
-    // Unix socket the schedule snapshot is served on, one NDJSON line per connection. The
-    // Control Panel reads it here to show what is scheduled and when it last ran. The unit
+    // Unix socket the daemon answers on, over HTTP. A read of the schedule snapshot is a GET and an
+    // instruction — postponing a window, say — is a POST, so one socket carries both. The unit
     // creates the parent directory (RuntimeDirectory=kgsm-scheduler).
-    "StatusSocketPath": "/run/kgsm-scheduler/status.sock",
+    "SocketPath": "/run/kgsm-scheduler/scheduler.sock",
 
-    // Unix socket the daemon takes instructions on — postponing a scheduled restart, for instance.
-    // Separate from the status socket, whose contract is that a client only ever reads.
-    "ControlSocketPath": "/run/kgsm-scheduler/control.sock",
+    // Unix socket the daemon answers for ITSELF on: its configuration, its unit, its journal and the
+    // commands it declares. The Control Panel reaches it through the node's API, which relays here.
+    "SurfaceSocketPath": "/run/kgsm-scheduler/surface.sock",
+
+    // The env file a configuration change made through the Control Panel is written to. It has to be
+    // a file this unit loads with EnvironmentFile=, or the panel reports the settings read-only.
+    "ConfigOverridePath": "/var/lib/kgsm-api/leaf-overrides/scheduler.env",
 
     // Directory the daemon keeps its own state in — which servers have already been told a restart
     // is coming, so a restart of this daemon neither repeats the warnings nor forgets it made them.

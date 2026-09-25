@@ -27,7 +27,9 @@ public class SchedulerOptionsTests
 
         Assert.Equal("/usr/bin/kgsm", o.KgsmPath);
         Assert.Equal("/run/kgsm-watchdog/control.sock", o.WatchdogSocketPath);
-        Assert.Equal("/run/kgsm-scheduler/status.sock", o.StatusSocketPath);
+        Assert.Equal("/run/kgsm-scheduler/scheduler.sock", o.SocketPath);
+        Assert.Equal("/run/kgsm-scheduler/surface.sock", o.SurfaceSocketPath);
+        Assert.Equal("/var/lib/kgsm-api/leaf-overrides/scheduler.env", o.ConfigOverridePath);
         Assert.Equal(60, o.PollIntervalSeconds);
         Assert.Equal(10, o.GraceWindowMinutes);
         Assert.True(o.UpdateCheckEnabled);
@@ -170,11 +172,15 @@ public class SchedulerOptionsTests
         var o = Bind(
             (nameof(SchedulerSettings.KgsmPath), written),
             (nameof(SchedulerSettings.WatchdogSocketPath), written),
-            (nameof(SchedulerSettings.StatusSocketPath), written));
+            (nameof(SchedulerSettings.SocketPath), written),
+            (nameof(SchedulerSettings.SurfaceSocketPath), written),
+            (nameof(SchedulerSettings.ConfigOverridePath), written));
 
         Assert.Equal("/usr/bin/kgsm", o.KgsmPath);
         Assert.Equal("/run/kgsm-watchdog/control.sock", o.WatchdogSocketPath);
-        Assert.Equal("/run/kgsm-scheduler/status.sock", o.StatusSocketPath);
+        Assert.Equal("/run/kgsm-scheduler/scheduler.sock", o.SocketPath);
+        Assert.Equal("/run/kgsm-scheduler/surface.sock", o.SurfaceSocketPath);
+        Assert.Equal("/var/lib/kgsm-api/leaf-overrides/scheduler.env", o.ConfigOverridePath);
     }
 
     [Fact]

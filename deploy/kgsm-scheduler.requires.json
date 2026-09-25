@@ -9,7 +9,7 @@
   "commands": [
     { "name": "kgsm", "package": "kgsm", "required": true, "probe": "kgsm --version", "why": "reads each instance's schedule config through kgsm-lib" },
 
-    { "name": "python3", "package": "python", "required": false, "probe": "python3 --version", "why": "deploy.sh's health probe opens the status socket, which bash cannot do", "without": "the probe degrades to `systemctl is-active` and says so rather than claiming a stronger check" }
+    { "name": "curl", "package": "curl", "required": false, "probe": "curl --version", "why": "deploy.sh's health probe asks the daemon's socket for /health, which bash cannot open", "without": "the probe degrades to `systemctl is-active` and says so rather than claiming a stronger check" }
   ],
   "services": [
     { "name": "kgsm-watchdog.service", "required": true, "why": "every scheduled restart is issued as IWatchdogClient.RestartAsync — the scheduler never stops a server itself", "without": "schedules are computed and every fire fails" }

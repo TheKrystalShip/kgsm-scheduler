@@ -57,21 +57,15 @@ render_unit() {   # $1 = unit filename
         "${REPO_DIR}/deploy/$1"
 }
 
-# The daemon's documented health signal is its status socket: connect and read one NDJSON line.
-# That proves the engine is actually serving, which "systemd launched it" does not. A raw unix
-# socket is not something bash can open, so the probe goes through python3; if python3 is absent
-# the probe degrades to liveness and says so rather than silently claiming a stronger check.
-SCHED_SOCK="${Scheduler__StatusSocketPath:-/run/kgsm-scheduler/status.sock}"
+# The daemon's documented health signal is its own socket, which it serves HTTP on: ask it for
+# /health and expect a 200. That proves the engine is actually serving, which "systemd launched it"
+# does not. bash cannot open a unix socket, so the probe goes through curl --unix-socket; if curl is
+# absent the probe degrades to liveness and says so rather than silently claiming a stronger check.
+SCHED_SOCK="${Scheduler__SocketPath:-/run/kgsm-scheduler/scheduler.sock}"
 health_probe() {
     systemctl is-active --quiet "$SERVICE" || return 1
-    command -v python3 >/dev/null 2>&1 || return 0
-    python3 - "$SCHED_SOCK" <<'PY' 2>/dev/null
-import socket, sys
-s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-s.settimeout(2)
-s.connect(sys.argv[1])
-sys.exit(0 if s.makefile().readline().strip() else 1)
-PY
+    command -v curl >/dev/null 2>&1 || return 0
+    curl -fsS --max-time 2 --unix-socket "$SCHED_SOCK" http://scheduler/health >/dev/null 2>&1
 }
 # Anything else one-shot and privileged this project needs provisioned. setup.sh calls it once
 # the units are live; deploy.sh never does. Keep it idempotent — setup.sh is re-runnable. Use

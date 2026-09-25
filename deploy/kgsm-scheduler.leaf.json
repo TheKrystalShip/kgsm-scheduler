@@ -87,26 +87,35 @@
       "risk": "wiring"
     },
     {
-      "key": "statusSocket",
-      "env": "Scheduler__StatusSocketPath",
-      "label": "Status socket",
-      "description": "Unix socket the scheduler serves its schedule snapshot on. The Control Panel reads it here to show what is scheduled and when it last ran.",
+      "key": "socket",
+      "env": "Scheduler__SocketPath",
+      "label": "Scheduler socket",
+      "description": "Unix socket the scheduler answers on. The Control Panel reads what is scheduled here, and sends the instructions that defer a window through the same socket.",
       "group": "wiring",
       "type": "path",
-      "default": "/run/kgsm-scheduler/status.sock",
+      "default": "/run/kgsm-scheduler/scheduler.sock",
       "risk": "wiring",
       "pairedApiKey": "Api__SchedulerSocketPath"
     },
     {
-      "key": "controlSocket",
-      "env": "Scheduler__ControlSocketPath",
-      "label": "Control socket",
-      "description": "Unix socket the scheduler takes instructions on — postponing a scheduled restart, for instance. Separate from the status socket, which is read-only.",
+      "key": "surfaceSocket",
+      "env": "Scheduler__SurfaceSocketPath",
+      "label": "Own-surface socket",
+      "description": "Unix socket the Control Panel reaches this service's own configuration and journal through. Moving it makes the panel read these settings off disk instead, which still works and cannot apply a change while the service is up.",
       "group": "wiring",
       "type": "path",
-      "default": "/run/kgsm-scheduler/control.sock",
-      "risk": "wiring",
-      "pairedApiKey": "Api__SchedulerControlSocketPath"
+      "default": "/run/kgsm-scheduler/surface.sock",
+      "risk": "wiring"
+    },
+    {
+      "key": "configOverridePath",
+      "env": "Scheduler__ConfigOverridePath",
+      "label": "Override file",
+      "description": "Where a setting changed in the Control Panel is written. It has to be a file this service's unit loads with EnvironmentFile= — the panel checks, and reports the settings as read-only rather than writing a change nothing would read.",
+      "group": "wiring",
+      "type": "path",
+      "default": "/var/lib/kgsm-api/leaf-overrides/scheduler.env",
+      "risk": "wiring"
     },
     {
       "key": "stateDirectory",

@@ -9,10 +9,10 @@
 # before building. Publishes the Native-AOT binary as YOU — a single self-contained native
 # binary, NO .NET runtime needed on the host.
 #
-# Deploy is verified against the status socket (connect + read a status line), which is the
-# daemon's documented health signal — not merely "systemd launched it".
+# Deploy is verified against the daemon's own socket (an HTTP GET of /health), which is its
+# documented health signal — not merely "systemd launched it".
 #
-# Knobs: RID, Scheduler__StatusSocketPath, HEALTH_TRIES.
+# Knobs: RID, Scheduler__SocketPath, HEALTH_TRIES.
 #
 set -euo pipefail
 
@@ -90,13 +90,13 @@ log "starting ${SERVICE}"
 sysctl_do start "$SERVICE"
 STOPPED=0
 
-# ── 4. Verify (connect to the status socket and read a line) ───────────────────
-log "waiting for ${SERVICE} to serve its status socket at ${SCHED_SOCK} ..."
+# ── 4. Verify (ask the daemon's socket for /health) ───────────────────────────
+log "waiting for ${SERVICE} to answer on ${SCHED_SOCK} ..."
 if wait_health; then
-    log "kgsm-scheduler is up and serving status ✓"
+    log "kgsm-scheduler is up and answering ✓"
     systemctl --no-pager --lines=0 status "$SERVICE" 2>/dev/null | head -n 4 || true
 else
-    err "service started but ${SCHED_SOCK} did not serve a status line within ${HEALTH_TRIES}s."
+    err "service started but ${SCHED_SOCK} did not answer within ${HEALTH_TRIES}s."
     err "recent logs:"
     journalctl -u "$SERVICE" -n 30 --no-pager || true
     exit 1

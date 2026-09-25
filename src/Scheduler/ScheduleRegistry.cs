@@ -42,8 +42,8 @@ internal sealed record ScheduleState
 }
 
 /// <summary>
-/// Thread-safe snapshot store shared between <see cref="SchedulerEngine"/> (writer)
-/// and <see cref="StatusSocketServer"/> (reader).
+/// Thread-safe snapshot store shared between <see cref="SchedulerEngine"/> (writer), the status
+/// endpoint (reader) and <see cref="WindowControl"/> (which moves one window's standing target).
 /// </summary>
 internal sealed class ScheduleRegistry
 {

@@ -11,7 +11,7 @@ records the upstream version an update window then acts on.
 It is a **leaf**: it depends only on `kgsm-lib` (which reaches `kgsm` and the
 watchdog), never on `kgsm-api` or a sibling leaf. It runs fully standalone,
 co-located with a `kgsm`. The API's use of it is optional/additive — it reads the
-status socket and degrades gracefully when the daemon is absent.
+this daemon's socket and degrades gracefully when the daemon is absent.
 
 Maintenance ownership is the scheduler's; the **watchdog** owns autostart +
 crash-restart + CPU/mem caps. The per-instance config keys the scheduler reads are
@@ -78,7 +78,7 @@ second time.
   order, the abort, the record. See **The window run** below.
 - `src/Scheduler/WindowPlanner.cs` — the pure arithmetic that is this daemon's rather than
   kgsm-lib's: whether this host will fire a window, its period, its grace, its standing plan.
-- `src/Scheduler/SchedulerStatus.cs` — the records the status socket serves, and the
+- `src/Scheduler/SchedulerStatus.cs` — the records `/status` serves, and the
   outcome vocabulary they are written in.
 - `src/Scheduler/AnnouncementPlan.cs` — pure logic for what a server says before a window:
   reading the configured lead times, dropping the ones the window is too frequent to honour,
@@ -96,17 +96,12 @@ second time.
   first and skips anything checked within **half** the interval, so restarting the daemon
   does not re-ask every upstream (see the doc comment for why half).
 - `src/Scheduler/ScheduleRegistry.cs` — thread-safe state and snapshot store shared between
-  the engine (writer), the runner (writer), the control socket (writer) and the status
-  socket (reader). Every write is a read-modify-write under one lock, because a run that
+  the engine (writer), the runner (writer), `WindowControl` (writer) and `/status`
+  (reader). Every write is a read-modify-write under one lock, because a run that
   finishes between ticks and the tick itself both write the same record.
-- `src/Scheduler/StatusSocketServer.cs` — `BackgroundService` that serves the current
-  status snapshot as one NDJSON line per connection over a unix socket. Health =
-  connect + parse.
-- `src/Scheduler/ControlSocketServer.cs` — the socket the daemon can be *told* something
-  on: one NDJSON request in, one reply out. A second socket rather than a second use of
-  the first, because the status socket's contract is that a client connects and only
-  reads — teaching it to wait for an optional request would put a timeout in front of
-  every status read to serve a command that arrives rarely. See **Control socket** below.
+- `src/Scheduler/WindowControl.cs` — what the daemon can be *told*: postponing one
+  window's next fire, skipping an occurrence, bringing one forward. Every verb moves a
+  standing target and leaves the instance's configuration alone. See **The socket** below.
 - `src/Scheduler/SchedulerSettings.cs` — the configuration surface, shaped 1:1 to the
   `Scheduler` section of `kgsm-scheduler.settings.json` and bound in one step. Holds
   what was *written*, unvalidated.
@@ -147,9 +142,8 @@ project's units, enables the unit, then verifies the grant by making the same un
 That is what makes `deploy.sh` **need no privilege at all**: the prefix is yours so installing the
 AOT binary is a plain file write, a changed unit is a plain file write into the user-owned
 directory, and every `systemctl` verb goes through the polkit grant. It refuses **before building**,
-with *"run `deploy/setup.sh`"*, on an unprovisioned host, and verifies the result by connecting to
-the status socket and reading a line — the daemon's own definition of healthy, not just
-`is-active`. If some *other* operation seems to need root, stop and ask; don't reintroduce `sudo`.
+with *"run `deploy/setup.sh`"*, on an unprovisioned host, and verifies the result by asking the
+daemon's socket for `/health` — the daemon's own definition of healthy, not just `is-active`. If some *other* operation seems to need root, stop and ask; don't reintroduce `sudo`.
 
 `deploy-common.sh` holds the paths/units/helpers both scripts share. The three files are
 self-contained, so a standalone clone deploys with no other repo checked out; every `kgsm-*` repo
@@ -226,7 +220,7 @@ interface IMaintenanceTask
 
 **This is the extension point.** A task is one class here, one grammar token in kgsm-lib's
 parser, one entry in the API's token set and one toggle in the Control Panel. It adds no
-cadence, no plan, and no field on the status socket — a window already reports one row per
+cadence, no plan, and no field on `/status` — a window already reports one row per
 task it ran.
 
 `IsDisruptive` carries two facts at once, and they are the same fact: a task that interrupts
@@ -393,10 +387,13 @@ and reading the second as the first silences a server full of people.
 
 **Delivered means the engine wrote to the console, never that a person read it.**
 
-## Status socket
+## The socket
 
-Default `/run/kgsm-scheduler/status.sock` (`Scheduler__StatusSocketPath`). One NDJSON line per
-connect. This is what `kgsm-api` connects to for its own aggregation:
+Default `/run/kgsm-scheduler/scheduler.sock` (`Scheduler__SocketPath`), serving HTTP: `GET /health`
+for liveness, `GET /status` for the snapshot, and one `POST` route per verb. A read is a `GET` and an
+instruction is a `POST`, so one socket carries both and neither waits on the other.
+
+`GET /status` is what `kgsm-api` reads for its own aggregation:
 
 ```json
 { "instances": [ {
@@ -437,21 +434,25 @@ fetched. A server skipped as recently-checked is null here while the engine hold
 surface answering *"when was this last checked for updates"* wants the engine's `checked_at`
 from the status read; these three fields answer *"is the sweep working, and what failed"*.
 
-## Control socket
+## What it can be told
 
-Default `/run/kgsm-scheduler/control.sock` (`Scheduler__ControlSocketPath`). One NDJSON request
-per connection, one reply, then closed:
+Each verb is its own route under `/windows/`, carrying the instance and window it acts on:
 
 ```
-→ {"command":"postpone","instance":"factorio-01","window":"daily@04:00","minutes":60}
-← {"ok":true,"message":"postponed 60 minute(s)","nextFireUtc":"2026-08-13T05:00:00+00:00"}
+→ POST /windows/postpone  {"instance":"factorio-01","window":"daily@04:00","minutes":60}
+← 200                     {"ok":true,"message":"postponed 60 minute(s)","nextFireUtc":"2026-08-13T05:00:00+00:00"}
 ```
 
-| verb | arguments | what it does |
+| route | body | what it does |
 |---|---|---|
-| `postpone` | `instance`, `window`, `minutes` (1–720, default 60) | pushes this window's next run back |
-| `skip` | `instance`, `window` | drops this occurrence; the one after it is unaffected |
-| `run-now` | `instance`, `window` | brings this window forward to the next poll |
+| `POST /windows/postpone` | `instance`, `window`, `minutes` (1–720, default 60) | pushes this window's next run back |
+| `POST /windows/skip` | `instance`, `window` | drops this occurrence; the one after it is unaffected |
+| `POST /windows/run-now` | `instance`, `window` | brings this window forward to the next poll |
+
+**A refusal is an answer.** An instruction naming a window this host does not have was read perfectly
+well and declined, so it comes back 200 with `ok:false` and its own reason. A non-2xx keeps its single
+meaning of "this daemon could not read what you sent" — a 400 for a body that is not a request, a 404
+for a verb that is not a route.
 
 `minutes` is capped at 720: past that it is a schedule change, and a schedule change belongs in the
 instance's own config where it survives a restart of this daemon.
@@ -482,8 +483,20 @@ brings back an unannounced countdown, announced afresh.
 
 **The daemon enforces no authorization here, and the shipped command manifest says so** (`gates`
 bucket `none`). A unix socket carries no identity; the only restriction is the filesystem permission
-on the socket — the same posture as the status socket. A caller that wants a tier check owes it
-itself — `kgsm-api` gates its buttons at operator before it dials this.
+on the socket. A caller that wants a tier check owes it itself — `kgsm-api` gates its buttons at
+operator before it dials this.
+
+## Its own surface
+
+Default `/run/kgsm-scheduler/surface.sock` (`Scheduler__SurfaceSocketPath`), a socket of its own so
+the node's API finds it from this component's id alone. It serves what this component answers about
+itself — its descriptor and the deploy floors under it, the overrides in force, its journal, its unit
+and the commands it declares — at the routes every component serves them at, under `/component`. A
+change made in the Control Panel is written to `Scheduler__ConfigOverridePath`, a file this unit
+already loads with `EnvironmentFile=`.
+
+All of it is `TheKrystalShip.KGSM.ComponentSurface`, which lives beside the generator that writes the
+descriptor it reads, so a leaf and an anchor answer the same questions the same way.
 
 ## Version tracking
 

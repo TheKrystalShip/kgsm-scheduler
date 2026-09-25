@@ -46,20 +46,31 @@ internal sealed class SchedulerSettings
         Risk = ConfigRisk.Wiring)]
     public string WatchdogSocketPath { get; set; } = "/run/kgsm-watchdog/control.sock";
 
-    /// <summary>Unix socket the schedule snapshot is served on, one NDJSON line per connection.</summary>
-    /// <panel>Unix socket the scheduler serves its schedule snapshot on. The Control Panel reads it here
-    /// to show what is scheduled and when it last ran.</panel>
-    [ConfigField("statusSocket", "Status socket", Group = "wiring", Type = ConfigType.Path,
+    /// <summary>Unix socket this daemon serves its schedule snapshot and its verbs on, over HTTP.
+    /// A read is a <c>GET</c> and an instruction is a <c>POST</c>, so one socket carries both without
+    /// either having to wait on the other.</summary>
+    /// <panel>Unix socket the scheduler answers on. The Control Panel reads what is scheduled here, and
+    /// sends the instructions that defer a window through the same socket.</panel>
+    [ConfigField("socket", "Scheduler socket", Group = "wiring", Type = ConfigType.Path,
         Risk = ConfigRisk.Wiring, PairedApiKey = "Api__SchedulerSocketPath")]
-    public string StatusSocketPath { get; set; } = "/run/kgsm-scheduler/status.sock";
+    public string SocketPath { get; set; } = "/run/kgsm-scheduler/scheduler.sock";
 
-    /// <summary>Unix socket the scheduler takes instructions on, one NDJSON request and one reply per
-    /// connection. Separate from the status socket, whose contract is that a client only ever reads.</summary>
-    /// <panel>Unix socket the scheduler takes instructions on — postponing a scheduled restart, for
-    /// instance. Separate from the status socket, which is read-only.</panel>
-    [ConfigField("controlSocket", "Control socket", Group = "wiring", Type = ConfigType.Path,
-        Risk = ConfigRisk.Wiring, PairedApiKey = "Api__SchedulerControlSocketPath")]
-    public string ControlSocketPath { get; set; } = "/run/kgsm-scheduler/control.sock";
+    /// <summary>Unix socket this daemon answers for ITSELF on — its configuration, its unit, its
+    /// journal and the commands it declares.</summary>
+    /// <panel>Unix socket the Control Panel reaches this service's own configuration and journal
+    /// through. Moving it makes the panel read these settings off disk instead, which still works and
+    /// cannot apply a change while the service is up.</panel>
+    [ConfigField("surfaceSocket", "Own-surface socket", Group = "wiring", Type = ConfigType.Path,
+        Risk = ConfigRisk.Wiring)]
+    public string SurfaceSocketPath { get; set; } = "/run/kgsm-scheduler/surface.sock";
+
+    /// <summary>The env file a configuration change made through the panel is written to.</summary>
+    /// <panel>Where a setting changed in the Control Panel is written. It has to be a file this
+    /// service's unit loads with EnvironmentFile= — the panel checks, and reports the settings as
+    /// read-only rather than writing a change nothing would read.</panel>
+    [ConfigField("configOverridePath", "Override file", Group = "wiring", Type = ConfigType.Path,
+        Risk = ConfigRisk.Wiring)]
+    public string ConfigOverridePath { get; set; } = "/var/lib/kgsm-api/leaf-overrides/scheduler.env";
 
     /// <summary>Directory this daemon keeps state in that must survive a restart of it — which
     /// announcements have already been made about a restart that has not happened yet.</summary>

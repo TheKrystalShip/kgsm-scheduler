@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using TheKrystalShip.KGSM.Core.Scheduling;
 
 namespace TheKrystalShip.Kgsm.Scheduler.Tests;
@@ -9,23 +8,24 @@ namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 /// <para>
 /// Every verb moves a standing target and leaves the instance's configuration alone, which is the
 /// whole distinction between "not tonight" and "change the schedule". Everything here is about
-/// keeping that true, about a verb reaching the window it named and no other, and about a malformed
-/// line never reaching the engine.
+/// keeping that true, about a verb reaching the window it named and no other, and about an
+/// instruction that names nothing never reaching the engine.
 /// </para>
 /// </summary>
-public sealed class ControlSocketTests
+public sealed class WindowControlTests
 {
     private static readonly DateTime Fire = new(2026, 8, 13, 4, 0, 0, DateTimeKind.Utc);
     private const string Restart = "daily@04:00";
     private const string Backup = "daily@05:00";
+    private const string Instance = "factorio-01";
 
-    private static (ControlSocketServer Server, ScheduleRegistry Registry) New(bool scheduled = true)
+    private static (WindowControl Control, ScheduleRegistry Registry) New(bool scheduled = true)
     {
         var registry = new ScheduleRegistry();
 
         if (scheduled)
         {
-            registry.Set("factorio-01", new ScheduleState
+            registry.Set(Instance, new ScheduleState
             {
                 Windows = new Dictionary<string, WindowState>(StringComparer.Ordinal)
                 {
@@ -35,10 +35,12 @@ public sealed class ControlSocketTests
             });
         }
 
-        var server = new ControlSocketServer(
-            Options.Create(new SchedulerOptions()), registry, NullLogger<ControlSocketServer>.Instance);
-        return (server, registry);
+        return (new WindowControl(registry, NullLogger<WindowControl>.Instance), registry);
     }
+
+    /// <summary>The instruction the panel's "not tonight" button sends, for one window.</summary>
+    private static ControlRequest On(string? window, int? minutes = null) =>
+        new(Instance, window, minutes);
 
     /// <summary>Seeds one window the way a tick leaves it: planned, with a standing target.</summary>
     private static WindowState Window(string expression, DateTime next)
@@ -60,15 +62,14 @@ public sealed class ControlSocketTests
     [Fact]
     public void Postponing_moves_the_standing_target_and_nothing_else()
     {
-        (ControlSocketServer server, ScheduleRegistry registry) = New();
+        (WindowControl control, ScheduleRegistry registry) = New();
 
-        ControlResponse response = server.Handle(
-            $$"""{"command":"postpone","instance":"factorio-01","window":"{{Restart}}","minutes":60}""");
+        ControlResponse response = control.Postpone(On(Restart, 60));
 
         Assert.True(response.Ok);
         Assert.Equal(Fire.AddHours(1), response.NextFireUtc!.Value.UtcDateTime);
 
-        ScheduleState state = registry.Get("factorio-01")!;
+        ScheduleState state = registry.Get(Instance)!;
         Assert.Equal(Fire.AddHours(1), state.Windows[Restart].Plan.NextUtc);
         // The window is untouched, so the id, the tasks and the schedule all still read as they did.
         Assert.Equal($"{Restart}/restart", state.Windows[Restart].Window.ToExpression());
@@ -81,11 +82,11 @@ public sealed class ControlSocketTests
     [Fact]
     public void A_verb_reaches_the_window_it_named_and_no_other()
     {
-        (ControlSocketServer server, ScheduleRegistry registry) = New();
+        (WindowControl control, ScheduleRegistry registry) = New();
 
-        server.Handle($$"""{"command":"postpone","instance":"factorio-01","window":"{{Restart}}"}""");
+        control.Postpone(On(Restart));
 
-        Assert.Equal(Fire.AddHours(1), registry.Get("factorio-01")!.Windows[Backup].Plan.NextUtc);
+        Assert.Equal(Fire.AddHours(1), registry.Get(Instance)!.Windows[Backup].Plan.NextUtc);
     }
 
     [Fact]
@@ -93,12 +94,12 @@ public sealed class ControlSocketTests
     {
         // Nothing about the instance's configuration changed, so the next tick's re-plan keeps the
         // moved target and the fire after it lands where it always would have.
-        (ControlSocketServer server, ScheduleRegistry registry) = New();
-        server.Handle($$"""{"command":"postpone","instance":"factorio-01","window":"{{Restart}}"}""");
+        (WindowControl control, ScheduleRegistry registry) = New();
+        control.Postpone(On(Restart));
 
         // The signature is untouched, so the next tick keeps this target rather than recomputing one:
         // a postponement a re-plan discarded a minute later would be no postponement at all.
-        WindowState window = registry.Get("factorio-01")!.Windows[Restart];
+        WindowState window = registry.Get(Instance)!.Windows[Restart];
 
         Assert.Same(window.Plan,
             WindowPlanner.Plan(window.Plan, Read($"{Restart}/restart"), TimeZoneInfo.Utc, Fire.AddHours(2)));
@@ -107,19 +108,17 @@ public sealed class ControlSocketTests
     [Fact]
     public void An_hour_is_the_default_because_that_is_what_the_button_says() =>
         Assert.Equal(Fire.AddHours(1),
-            New().Server.Handle($$"""{"command":"postpone","instance":"factorio-01","window":"{{Restart}}"}""")
-                .NextFireUtc!.Value.UtcDateTime);
+            New().Control.Postpone(On(Restart)).NextFireUtc!.Value.UtcDateTime);
 
     [Theory]
     [InlineData(0)]
     [InlineData(-30)]
-    [InlineData(ControlSocketServer.MaxMinutes + 1)]
+    [InlineData(WindowControl.MaxMinutes + 1)]
     public void A_postponement_has_a_ceiling(int minutes)
     {
         // Past the ceiling it is a schedule change, and a schedule change belongs in the instance's own
         // config where it survives a restart of this daemon.
-        ControlResponse response = New().Server.Handle(
-            $$"""{"command":"postpone","instance":"factorio-01","window":"{{Restart}}","minutes":{{minutes}}}""");
+        ControlResponse response = New().Control.Postpone(On(Restart, minutes));
 
         Assert.False(response.Ok);
         Assert.Contains("between 1 and", response.Message);
@@ -130,10 +129,9 @@ public sealed class ControlSocketTests
     {
         // Each instruction is "not for another hour", so two of them mean two hours. The alternative —
         // clamping to one postponement — would silently ignore the second tap.
-        (ControlSocketServer server, ScheduleRegistry _) = New();
-        server.Handle($$"""{"command":"postpone","instance":"factorio-01","window":"{{Restart}}"}""");
-        ControlResponse second = server.Handle(
-            $$"""{"command":"postpone","instance":"factorio-01","window":"{{Restart}}"}""");
+        (WindowControl control, ScheduleRegistry _) = New();
+        control.Postpone(On(Restart));
+        ControlResponse second = control.Postpone(On(Restart));
 
         Assert.Equal(Fire.AddHours(2), second.NextFireUtc!.Value.UtcDateTime);
     }
@@ -147,8 +145,7 @@ public sealed class ControlSocketTests
     [Fact]
     public void Skipping_moves_the_target_to_the_next_occurrence()
     {
-        ControlResponse response = New().Server.Handle(
-            $$"""{"command":"skip","instance":"factorio-01","window":"{{Restart}}"}""");
+        ControlResponse response = New().Control.Skip(On(Restart));
 
         Assert.True(response.Ok);
         Assert.Equal(Fire.AddDays(1), response.NextFireUtc!.Value.UtcDateTime);
@@ -164,16 +161,15 @@ public sealed class ControlSocketTests
     [Fact]
     public void Running_now_brings_the_target_to_the_present()
     {
-        (ControlSocketServer server, ScheduleRegistry registry) = New();
+        (WindowControl control, ScheduleRegistry registry) = New();
         var before = DateTime.UtcNow;
 
-        ControlResponse response = server.Handle(
-            $$"""{"command":"run-now","instance":"factorio-01","window":"{{Restart}}"}""");
+        ControlResponse response = control.RunNow(On(Restart));
 
         Assert.True(response.Ok);
-        DateTime moved = registry.Get("factorio-01")!.Windows[Restart].Plan.NextUtc!.Value;
+        DateTime moved = registry.Get(Instance)!.Windows[Restart].Plan.NextUtc!.Value;
         Assert.InRange(moved, before, DateTime.UtcNow);
-        Assert.True(WindowPlanner.IsDue(registry.Get("factorio-01")!.Windows[Restart].Plan, DateTime.UtcNow));
+        Assert.True(WindowPlanner.IsDue(registry.Get(Instance)!.Windows[Restart].Plan, DateTime.UtcNow));
     }
 
     // ---- what it refuses ---------------------------------------------------
@@ -181,8 +177,7 @@ public sealed class ControlSocketTests
     [Fact]
     public void An_instance_with_no_windows_is_told_so()
     {
-        ControlResponse response = New(scheduled: false).Server.Handle(
-            """{"command":"postpone","instance":"factorio-01","window":"daily@04:00"}""");
+        ControlResponse response = New(scheduled: false).Control.Postpone(On("daily@04:00"));
 
         Assert.False(response.Ok);
         Assert.Contains("no maintenance windows", response.Message);
@@ -196,10 +191,9 @@ public sealed class ControlSocketTests
     [InlineData("postpone")]
     [InlineData("skip")]
     [InlineData("run-now")]
-    public void A_verb_that_names_no_window_is_refused_with_the_ids_it_could_have_named(string command)
+    public void A_verb_that_names_no_window_is_refused_with_the_ids_it_could_have_named(string verb)
     {
-        ControlResponse response = New().Server.Handle(
-            $$"""{"command":"{{command}}","instance":"factorio-01"}""");
+        ControlResponse response = Apply(New().Control, verb, On(window: null));
 
         Assert.False(response.Ok);
         Assert.Contains("no window named", response.Message);
@@ -210,41 +204,29 @@ public sealed class ControlSocketTests
     [Fact]
     public void A_window_this_instance_does_not_have_is_refused()
     {
-        ControlResponse response = New().Server.Handle(
-            """{"command":"skip","instance":"factorio-01","window":"weekly.sun@04:00"}""");
+        ControlResponse response = New().Control.Skip(On("weekly.sun@04:00"));
 
         Assert.False(response.Ok);
         Assert.Contains("no window 'weekly.sun@04:00'", response.Message);
     }
 
+    /// <summary>
+    /// An instruction that names nothing is refused rather than guessed at, and the schedule it did
+    /// not name is left exactly where it was.
+    /// </summary>
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData("not json at all")]
-    [InlineData("{")]
-    public void A_line_that_is_not_a_request_is_refused_rather_than_guessed_at(string? line)
+    [InlineData("postpone")]
+    [InlineData("skip")]
+    [InlineData("run-now")]
+    public void An_instruction_naming_nothing_never_reaches_a_schedule(string verb)
     {
-        ControlResponse response = New().Server.Handle(line);
-        Assert.False(response.Ok);
-        // And the registry is untouched — a malformed line must never reach a schedule.
-        Assert.Equal(Fire, New().Registry.Get("factorio-01")!.Windows[Restart].Plan.NextUtc);
-    }
+        (WindowControl control, ScheduleRegistry registry) = New();
 
-    [Fact]
-    public void An_unknown_verb_names_itself_in_the_refusal()
-    {
-        ControlResponse response = New().Server.Handle("""{"command":"cancel","instance":"factorio-01"}""");
-        Assert.False(response.Ok);
-        Assert.Contains("cancel", response.Message);
-    }
+        ControlResponse response = Apply(control, verb, new ControlRequest(null, null, null));
 
-    [Fact]
-    public void A_request_naming_no_instance_does_nothing()
-    {
-        ControlResponse response = New().Server.Handle("""{"command":"postpone"}""");
         Assert.False(response.Ok);
         Assert.Contains("no instance", response.Message);
+        Assert.Equal(Fire, registry.Get(Instance)!.Windows[Restart].Plan.NextUtc);
     }
 
     /// <summary>An invalid window has no fire to move, and nothing here invents one.</summary>
@@ -252,7 +234,7 @@ public sealed class ControlSocketTests
     public void A_window_with_no_next_fire_has_nothing_to_move()
     {
         var registry = new ScheduleRegistry();
-        registry.Set("factorio-01", new ScheduleState
+        registry.Set(Instance, new ScheduleState
         {
             Windows = new Dictionary<string, WindowState>(StringComparer.Ordinal)
             {
@@ -262,13 +244,21 @@ public sealed class ControlSocketTests
             },
         });
 
-        var server = new ControlSocketServer(
-            Options.Create(new SchedulerOptions()), registry, NullLogger<ControlSocketServer>.Instance);
+        var control = new WindowControl(registry, NullLogger<WindowControl>.Instance);
 
-        ControlResponse response = server.Handle(
-            """{"command":"postpone","instance":"factorio-01","window":"every thursday"}""");
+        ControlResponse response = control.Postpone(On("every thursday"));
 
         Assert.False(response.Ok);
         Assert.Contains("no next fire", response.Message);
     }
+
+    /// <summary>Each verb by the name its route carries, so a case can be written once for all three.</summary>
+    private static ControlResponse Apply(WindowControl control, string verb, ControlRequest request) =>
+        verb switch
+        {
+            "postpone" => control.Postpone(request),
+            "skip" => control.Skip(request),
+            "run-now" => control.RunNow(request),
+            _ => throw new ArgumentOutOfRangeException(nameof(verb), verb, "not a verb this daemon serves"),
+        };
 }
