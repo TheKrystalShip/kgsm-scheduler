@@ -4,6 +4,13 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Fixed — a boolean this component's settings file sets reads as on (3.3.1)
+
+`ComponentSurface` 1.0.0-dev.6 spells a settings file's JSON booleans `true`/`false` rather than
+`True`/`False`. A surface decides which provenance tier a value came from, and whether a switch is on,
+by comparing those strings — so a floor of `True` against a coded default of `true` drew a switch this
+component has enabled as off, and named the wrong tier as its source.
+
 ### Changed — one socket, speaking HTTP, and this daemon answers for itself (3.3.0)
 
 The daemon serves HTTP over a unix socket at `Scheduler__SocketPath`
