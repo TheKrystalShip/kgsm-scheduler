@@ -4,6 +4,15 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Fixed — a setting whose source this component could not read reports as unknown (3.3.2)
+
+`ComponentSurface` 1.0.0-dev.8 carries whether every declared floor source was actually read, and reads
+this component's unit the way systemd reads it — one fragment, drop-ins merged by filename, and every
+assignment on an `Environment=` line rather than only the first. A field
+with no override and no floor value now reports `unknown` with no effective value when a source could
+not be read, rather than reporting the coded default as what is in force — which stated that nothing on
+this host sets a value when the truth was that the file which does could not be opened.
+
 ### Fixed — a boolean this component's settings file sets reads as on (3.3.1)
 
 `ComponentSurface` 1.0.0-dev.6 spells a settings file's JSON booleans `true`/`false` rather than
