@@ -29,7 +29,8 @@ All notable changes to `kgsm-scheduler` are documented here.
 - **The command manifest is schema 3**, each verb naming `scheduler:windows.write`.
 - New settings `AuthorityReplicaPath` and `ProviderFilePath`; the surface records setting authors from
   the `Kgsm-Acting-Account` the node's API relays.
-- Pins: `TheKrystalShip.KGSM.Lib` 8.10.0-dev.5, `Auth.Cluster` 1.0.0-dev.19, `ComponentConfig`
+- Pins: `TheKrystalShip.KGSM.Lib` 8.10.0-dev.5, `Auth.Cluster` 1.0.0-dev.20 (whose `AutomationAccess`
+  is the author ∩ service check), `ComponentConfig`
   3.2.0-dev.2, `ComponentSurface` 1.0.0-dev.10, `ComponentSurface.Http` 1.0.0-dev.6.
 
 ### Fixed — a setting whose source this component could not read reports as unknown (3.3.2)

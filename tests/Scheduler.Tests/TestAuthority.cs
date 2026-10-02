@@ -56,7 +56,7 @@ internal sealed class TestAuthority : IDisposable
                 new ActionManifest(1, "kgsm", "test",
                     [.. Required.Select(a => new ManifestAction(a["kgsm:".Length..], a, "execute", "instance", null))],
                     []),
-                new ActionManifest(1, AutomationAccess.Component, "test", [],
+                new ActionManifest(1, "scheduler", "test", [],
                     [.. (requires ?? Required).Select(a => new ManifestRequirement(a, "instance", "test"))]),
             ], 1), now);
 
@@ -102,7 +102,7 @@ internal sealed class TestAuthority : IDisposable
     /// <summary>This daemon's access over the replica, on <paramref name="node"/>.</summary>
     public AutomationAccess Access(string? node = Node) =>
         new(new MemberAccess(new AuthorityReplicaFile(ReplicaPath, NullLogger<AuthorityReplicaFile>.Instance)),
-            () => node);
+            "scheduler", () => node);
 
     public void Dispose()
     {

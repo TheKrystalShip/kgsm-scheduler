@@ -2,6 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheKrystalShip.KGSM;
+using TheKrystalShip.KGSM.Auth.Cluster;
 using TheKrystalShip.KGSM.Core.Interfaces;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
@@ -91,7 +92,7 @@ internal sealed class UpdateCheckSweep(
             if (ct.IsCancellationRequested) return;
 
             AutomationVerdict verdict = await access
-                .DecideAsync([KgsmActions.ServerRead], name, instance, switchedOnBy, ct)
+                .DecideAsync([KgsmActions.ServerRead], name, instance.InstallNonce, switchedOnBy, ct)
                 .ConfigureAwait(false);
             if (!verdict.Allowed)
             {

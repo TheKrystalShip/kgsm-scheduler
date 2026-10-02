@@ -105,6 +105,7 @@ internal sealed class Program
             options.ProviderFilePath, sp.GetRequiredService<ILogger<HostSessionKeys>>()));
         builder.Services.AddSingleton(sp => new AutomationAccess(
             sp.GetRequiredService<MemberAccess>(),
+            ComponentId,
             () => sp.GetRequiredService<HostSessionKeys>().Node));
 
         builder.Services.AddHostedService<SchedulerEngine>();

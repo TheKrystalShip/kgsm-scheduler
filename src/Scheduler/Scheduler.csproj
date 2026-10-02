@@ -38,7 +38,7 @@
     <!-- The cluster's authority, read off the replica the node on this machine keeps: every window
          and every sweep runs only where both this daemon's service account and the person who
          switched it on may do what it does. -->
-    <PackageReference Include="TheKrystalShip.KGSM.Auth.Cluster" Version="1.0.0-dev.19" />
+    <PackageReference Include="TheKrystalShip.KGSM.Auth.Cluster" Version="1.0.0-dev.20" />
   </ItemGroup>
 
   <ItemGroup>

@@ -39,7 +39,8 @@ One window run is one exclusive, announced, abort-on-failure sequence against on
 3. **The first failure aborts the rest.** The remaining tasks are recorded `aborted`.
 4. **Release the slot and write the record** — one `lastRun` against the window that ran.
 
-**Every task runs only while two accounts may do it, now** (`AutomationAccess`): this daemon's own
+**Every task runs only while two accounts may do it, now** (`Auth.Cluster`'s `AutomationAccess`, the one
+check the reactor makes too): this daemon's own
 service account, `svc:scheduler@<node>`, and the window's author — `maintenance_windows_author`, which
 the engine records with the windows and clears on any windows write that names nobody. Both must hold
 every one of the task's `Actions` at the server's install (`instance:<node>/<name>#<nonce>`), evaluated

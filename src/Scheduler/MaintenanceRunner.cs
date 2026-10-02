@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using TheKrystalShip.KGSM.Auth.Cluster;
 using TheKrystalShip.KGSM.Core.Interfaces;
 using TheKrystalShip.KGSM.Core.Models;
 using TheKrystalShip.KGSM.Core.Models.Enums;
@@ -110,7 +111,7 @@ internal sealed class MaintenanceRunner(
     /// </summary>
     private Task<AutomationVerdict> AuthorizeAsync(
         IMaintenanceTask task, string name, Instance instance, CancellationToken ct) =>
-        access.DecideAsync(task.Actions, name, instance, instance.MaintenanceWindowsAuthor, ct);
+        access.DecideAsync(task.Actions, name, instance.InstallNonce, instance.MaintenanceWindowsAuthor, ct);
 
     /// <summary>
     /// Opens a window run, off the tick so a long backup cannot hold up every other instance's

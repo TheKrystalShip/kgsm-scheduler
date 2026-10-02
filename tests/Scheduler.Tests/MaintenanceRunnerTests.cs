@@ -366,22 +366,6 @@ public sealed class MaintenanceRunnerTests : IDisposable
         Assert.Contains("own account", run.Tasks[0].Message);
     }
 
-    /// <summary>A replica nothing has written is "cannot tell", and cannot tell blocks.</summary>
-    [Fact]
-    public async Task A_replica_that_cannot_be_read_blocks()
-    {
-        var unreadable = new AutomationAccess(
-            new TheKrystalShip.KGSM.Auth.Cluster.MemberAccess(new TheKrystalShip.KGSM.Auth.Cluster.AuthorityReplicaFile(
-                Path.Combine(_dir, "absent.db"), NullLogger<TheKrystalShip.KGSM.Auth.Cluster.AuthorityReplicaFile>.Instance)),
-            () => TestAuthority.Node);
-
-        AutomationVerdict verdict = await unreadable.DecideAsync(
-            [TheKrystalShip.KGSM.KgsmActions.ServerRestart], Name, NewInstance(), _author, default);
-
-        Assert.False(verdict.Allowed);
-        Assert.Contains("could not be read", verdict.Reason);
-    }
-
     /// <summary>
     /// An update implies the restart that makes it the running build, so the people on the server
     /// are told one sentence rather than two.
