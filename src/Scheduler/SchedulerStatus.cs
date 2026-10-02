@@ -4,7 +4,7 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 /// The words an outcome is reported in, on the status socket and in this daemon's own log.
 /// </summary>
 /// <remarks>
-/// Four words rather than a boolean, because "did the maintenance work" has four genuinely
+/// Five words rather than a boolean, because "did the maintenance work" has five genuinely
 /// different answers and collapsing them loses the one a person acts on. <see cref="Skipped"/> is
 /// not a lesser <see cref="Failed"/>: the clock came round for something that does not apply — a
 /// server an operator had already stopped — and declining is the correct act, so it is recorded
@@ -25,6 +25,13 @@ internal static class MaintenanceOutcomes
 
     /// <summary>An earlier task in the same window failed, so this one never ran.</summary>
     public const string Aborted = "aborted";
+
+    /// <summary>
+    /// Nobody who may do it asked for it: the window's author, or this daemon's own account, does not
+    /// hold the task's action at the server now — or nobody is recorded as the author at all. Saving
+    /// the windows again, as somebody who holds it, makes them its author.
+    /// </summary>
+    public const string Blocked = "blocked";
 }
 
 /// <summary>One task's turn inside a window run.</summary>
@@ -59,6 +66,12 @@ internal sealed record MaintenanceRun(
 /// that will never fire apart from one that is simply not due.
 /// </param>
 /// <param name="LastRun">The last run of this window, or null if it has not run since this daemon started.</param>
+/// <param name="Author">The account that wrote the instance's windows, or null when nobody is recorded.</param>
+/// <param name="Blocked">
+/// Why this window would not run if it came due now — its author or this daemon's own account does not
+/// hold what it does, or it has no author — or null when it would. Read on every poll, so a window is
+/// shown blocked before it is due rather than discovered as a blocked run afterwards.
+/// </param>
 internal sealed record SchedulerWindowStatus(
     string Id,
     string Kind,
@@ -66,7 +79,9 @@ internal sealed record SchedulerWindowStatus(
     bool Valid,
     string? Error,
     DateTimeOffset? NextFireUtc,
-    MaintenanceRun? LastRun);
+    MaintenanceRun? LastRun,
+    string? Author = null,
+    string? Blocked = null);
 
 /// <summary>One server's maintenance, as this daemon holds it.</summary>
 /// <remarks>

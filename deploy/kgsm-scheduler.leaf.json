@@ -128,6 +128,26 @@
       "risk": "wiring"
     },
     {
+      "key": "authorityReplica",
+      "env": "Scheduler__AuthorityReplicaPath",
+      "label": "Authority replica",
+      "description": "The file the node on this machine keeps its copy of the cluster's accounts and roles in. A maintenance window runs only while both this service and the person who wrote it may do what it does, and this is where that is read.",
+      "group": "wiring",
+      "type": "path",
+      "default": "/var/lib/kgsm/auth/users.db",
+      "risk": "wiring"
+    },
+    {
+      "key": "providerFile",
+      "env": "Scheduler__ProviderFilePath",
+      "label": "Node identity file",
+      "description": "Where the scheduler reads which node it is on, which names its own service account. The node on this machine writes it; leave it at the default unless the node writes somewhere else.",
+      "group": "wiring",
+      "type": "path",
+      "default": "/var/lib/kgsm/cluster/auth-provider.json",
+      "risk": "wiring"
+    },
+    {
       "key": "pollIntervalSec",
       "env": "Scheduler__PollIntervalSeconds",
       "label": "Schedule re-scan interval",
@@ -177,11 +197,12 @@
       "key": "updateCheckEnabled",
       "env": "Scheduler__UpdateCheckEnabled",
       "label": "Check for game updates",
-      "description": "Whether to check each server for a newer game build. Turning this off means nothing on this host ever asks upstream, so no update notification is raised — servers keep running exactly as they are.",
+      "description": "Whether to check each server for a newer game build. Turning this off means nothing on this host ever asks upstream, so no update notification is raised — servers keep running exactly as they are. Whoever turns it on is its author: each server is checked only while they can still read it.",
       "group": "updates",
       "type": "bool",
-      "default": "true",
-      "risk": "safe"
+      "default": "false",
+      "risk": "safe",
+      "automates": true
     },
     {
       "key": "updateCheckIntervalMin",

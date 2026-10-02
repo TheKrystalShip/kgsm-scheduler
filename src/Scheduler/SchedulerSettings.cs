@@ -81,6 +81,22 @@ internal sealed class SchedulerSettings
         Risk = ConfigRisk.Wiring)]
     public string StateDirectory { get; set; } = "/var/lib/kgsm-scheduler";
 
+    /// <summary>The node's replica of the cluster's authority, read and never written.</summary>
+    /// <panel>The file the node on this machine keeps its copy of the cluster's accounts and roles in.
+    /// A maintenance window runs only while both this service and the person who wrote it may do what
+    /// it does, and this is where that is read.</panel>
+    [ConfigField("authorityReplica", "Authority replica", Group = "wiring", Type = ConfigType.Path,
+        Risk = ConfigRisk.Wiring)]
+    public string AuthorityReplicaPath { get; set; } = "/var/lib/kgsm/auth/users.db";
+
+    /// <summary>The host file the node on this machine names itself in.</summary>
+    /// <panel>Where the scheduler reads which node it is on, which names its own service account. The
+    /// node on this machine writes it; leave it at the default unless the node writes somewhere
+    /// else.</panel>
+    [ConfigField("providerFile", "Node identity file", Group = "wiring", Type = ConfigType.Path,
+        Risk = ConfigRisk.Wiring)]
+    public string ProviderFilePath { get; set; } = "/var/lib/kgsm/cluster/auth-provider.json";
+
     /// <summary>How often each server's schedule is re-read from KGSM (seconds). Raised to
     /// <see cref="SchedulerOptions.MinPollIntervalSeconds"/> if lower.</summary>
     /// <panel>How often each server's schedule is re-read from KGSM. This bounds how quickly a schedule
@@ -119,10 +135,16 @@ internal sealed class SchedulerSettings
 
     /// <summary>Whether to sweep every server for a newer game build. Off means nothing on this host
     /// ever asks, and no update is announced.</summary>
+    /// <remarks>
+    /// Automated behaviour, so whoever switches it on is recorded as its author, and the sweep checks a
+    /// server only while both this service and that person may read it. Off until somebody does.
+    /// </remarks>
     /// <panel>Whether to check each server for a newer game build. Turning this off means nothing on
     /// this host ever asks upstream, so no update notification is raised — servers keep running
-    /// exactly as they are.</panel>
+    /// exactly as they are. Whoever turns it on is its author: each server is checked only while they
+    /// can still read it.</panel>
     [ConfigField("updateCheckEnabled", "Check for game updates", Group = "updates", Type = ConfigType.Bool)]
+    [Automates]
     public bool? UpdateCheckEnabled { get; set; }
 
     /// <summary>How often the whole roster is swept for updates (minutes). Raised to

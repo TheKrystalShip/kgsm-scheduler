@@ -20,7 +20,11 @@ standing plan.
   `IInstanceService.CheckUpdate(name, emit: true)`, serial and staggered — each server asks its own
   upstream, so a parallel sweep is N simultaneous steamcmd logins in the same second. It consults the
   engine's `checked_at` first and skips anything checked within **half** the interval, so restarting
-  the daemon does not re-ask every upstream (the doc comment says why half).
+  the daemon does not re-ask every upstream (the doc comment says why half). **It is off until a person
+  switches it on**: `updateCheckEnabled` is `[Automates]`, so the surface records whoever sets it as its
+  author (`ComponentAutomationAuthors`, from the account the node's API relays as
+  `Kgsm-Acting-Account`), and each server is checked only while both this daemon's service account and
+  that author may read it — asked at every sweep, a refusal recorded on the server as `blocked: …`.
 
 ## The window run (`MaintenanceRunner`)
 
@@ -30,16 +34,31 @@ One window run is one exclusive, announced, abort-on-failure sequence against on
    ticks on a large game, and a restart must not land in the middle of one. A window that finds the
    slot held is recorded **`skipped` on itself**, with that reason, and the countdown it opened is
    retracted. Never `failed` — nothing failed — and never in another window's fields.
-2. **Run the tasks in canonical order.** Each is gated immediately before dispatch (below), then run.
+2. **Run the tasks in canonical order.** Each is authorized and then gated immediately before dispatch
+   (below), then run.
 3. **The first failure aborts the rest.** The remaining tasks are recorded `aborted`.
 4. **Release the slot and write the record** — one `lastRun` against the window that ran.
+
+**Every task runs only while two accounts may do it, now** (`AutomationAccess`): this daemon's own
+service account, `svc:scheduler@<node>`, and the window's author — `maintenance_windows_author`, which
+the engine records with the windows and clears on any windows write that names nobody. Both must hold
+every one of the task's `Actions` at the server's install (`instance:<node>/<name>#<nonce>`), evaluated
+from the node's replica (`Scheduler:AuthorityReplicaPath`, read and never written). So a window
+restarts only what its author could restart by hand, an author who loses access stops their windows at
+the next firing, and windows nobody is recorded as writing run nothing. A task refused is recorded
+**`blocked`** with the reason — whose access, which action — and the window carries on: a backup nobody
+may take says nothing about the restart after it. A replica that cannot be read, a node that has not
+named itself and a service account not yet created block the same way; running on a guess is the one
+thing an automation must not do. The same question is asked on every poll and carried on the window's
+status (`author`, `blocked`), so a window is shown blocked before it is due, and a disruptive task that
+would be blocked is never announced.
 
 The run happens off the tick, so a long backup on one instance cannot hold up every other instance's
 schedule. The slot is claimed synchronously as the tick dispatches, so two windows of the same
 instance coming due on one tick resolve deterministically.
 
-**Outcome vocabulary — `ok` · `failed` · `skipped` · `aborted`.** Four words rather than a boolean,
-because "did the maintenance work" has four genuinely different answers:
+**Outcome vocabulary — `ok` · `failed` · `skipped` · `aborted` · `blocked`.** Five words rather than a
+boolean, because "did the maintenance work" has five genuinely different answers:
 
 - **`ok`** — it was owed and it happened.
 - **`failed`** — it was owed and it did not happen. This is the one a surface raises.
@@ -47,9 +66,12 @@ because "did the maintenance work" has four genuinely different answers:
   operator had already stopped, and declining is the correct act, so it is recorded with its reason
   rather than raised.
 - **`aborted`** — an earlier task in the same window failed, so this one never got its turn.
+- **`blocked`** — nobody who may do it asked for it: the author or this daemon's account does not hold
+  the task's action, or the windows have no author. Somebody has to act on it — saving the windows
+  again makes the saver their author.
 
-The window as a whole is `failed` if any task failed, `ok` if any task did its work, and `skipped`
-when nothing applied.
+The window as a whole is `failed` if any task failed, `ok` if any task did its work, `blocked` if a task
+was held back and none did its work, and `skipped` when nothing applied.
 
 ## A task (`IMaintenanceTask`)
 
@@ -58,6 +80,7 @@ interface IMaintenanceTask
 {
     string Name { get; }                  // the grammar token
     bool IsDisruptive { get; }            // drives whether the window is announced
+    IReadOnlyList<string> Actions { get; } // what running it performs; author and service must hold each
     Task<TaskGate> GateAsync(Instance instance, IWatchdogClient watchdog, CancellationToken ct);
     Task<TaskOutcome> RunAsync(MaintenanceContext ctx, CancellationToken ct);
 }
@@ -320,10 +343,11 @@ warnings already given and announces the new countdown from scratch. What persis
 this daemon is only what was *said*, never the schedule — so the deferred fire coming back also brings
 back an unannounced countdown, announced afresh.
 
-**The daemon enforces no authorization here, and the shipped command manifest says so** (`gates`
-bucket `none`). A unix socket carries no identity; the only restriction is the filesystem permission on
-the socket. A caller that wants a tier check owes it itself — `kgsm-api` gates its buttons at operator
-before it dials this.
+**The verbs are `scheduler:windows.write`, checked by the caller.** A unix socket carries no identity;
+the only restriction on it is its filesystem permission. The shipped command manifest names the action
+each verb is performed under, and `kgsm-api` checks the person for it before it dials this — the action
+is declared here, where it is performed, and checked there. A window run early with `run-now` is still
+the window, gated by its author like any other firing.
 
 ## Its own surface
 

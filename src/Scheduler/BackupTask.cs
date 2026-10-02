@@ -30,6 +30,10 @@ internal sealed class BackupTask(ILogger<BackupTask> logger) : IMaintenanceTask
     /// <summary>Nobody is interrupted by an archive, so a backup-only window is never announced.</summary>
     public bool IsDisruptive => false;
 
+    /// <summary>The archive, and the prune to the retention after it, which deletes older ones.</summary>
+    public IReadOnlyList<string> Actions { get; } =
+        [TheKrystalShip.KGSM.KgsmActions.ServerBackupsCreate, TheKrystalShip.KGSM.KgsmActions.ServerBackupsManage];
+
     public Task<TaskGate> GateAsync(MaintenanceContext ctx, CancellationToken ct) =>
         Task.FromResult(TaskGate.Dispatch);
 

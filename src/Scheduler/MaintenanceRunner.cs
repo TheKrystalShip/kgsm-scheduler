@@ -39,6 +39,7 @@ internal sealed class MaintenanceRunner(
     ScheduleRegistry registry,
     MaintenanceTaskCatalog catalog,
     WindowAnnouncer announcer,
+    AutomationAccess access,
     IOptions<SchedulerOptions> options,
     ILogger<MaintenanceRunner> logger)
 {
@@ -56,11 +57,12 @@ internal sealed class MaintenanceRunner(
     /// <remarks>
     /// This decides whether the window is announced and what <c>{reason}</c> says. Announcing a
     /// restart that will not happen is the one thing an announcement must never do, so a task the
-    /// host policy refuses and a task the instance's runtime puts out of reach are both left out —
-    /// both are known before the countdown opens, and a countdown that can only end in a retraction
-    /// should never have started.
+    /// host policy refuses, a task the instance's runtime puts out of reach and a task nobody who may
+    /// do it asked for are all left out — each is known before the countdown opens, and a countdown
+    /// that can only end in a retraction should never have started.
     /// </remarks>
-    public IReadOnlyList<MaintenanceTask> DisruptiveTasks(ReadWindow read, Instance instance)
+    public async Task<IReadOnlyList<MaintenanceTask>> DisruptiveTasksAsync(
+        string name, ReadWindow read, Instance instance, CancellationToken ct)
     {
         if (!read.Valid || !options.Value.AllowDisruptiveTasks) return [];
 
@@ -69,8 +71,46 @@ internal sealed class MaintenanceRunner(
         // about it first.
         if (instance.Runtime == InstanceRuntime.Container) return [];
 
-        return read.Window.Tasks.Where(t => catalog.Find(t)?.IsDisruptive == true).ToArray();
+        var disruptive = new List<MaintenanceTask>();
+        foreach (MaintenanceTask task in read.Window.Tasks)
+        {
+            if (catalog.Find(task) is { IsDisruptive: true } implementation
+                && (await AuthorizeAsync(implementation, name, instance, ct).ConfigureAwait(false)).Allowed)
+            {
+                disruptive.Add(task);
+            }
+        }
+
+        return disruptive;
     }
+
+    /// <summary>
+    /// Why <paramref name="read"/> would not run on <paramref name="instance"/> if it came due now, or
+    /// null when every task it carries may run.
+    /// </summary>
+    public async Task<string?> BlockedAsync(string name, ReadWindow read, Instance instance, CancellationToken ct)
+    {
+        if (!read.Valid) return null;
+
+        foreach (MaintenanceTask task in read.Window.Tasks)
+        {
+            if (catalog.Find(task) is not { } implementation) continue;
+
+            AutomationVerdict verdict = await AuthorizeAsync(implementation, name, instance, ct).ConfigureAwait(false);
+            if (!verdict.Allowed)
+                return $"{implementation.Name}: {verdict.Reason}";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether this daemon and the window's author may both do what <paramref name="task"/> does at the
+    /// server, now.
+    /// </summary>
+    private Task<AutomationVerdict> AuthorizeAsync(
+        IMaintenanceTask task, string name, Instance instance, CancellationToken ct) =>
+        access.DecideAsync(task.Actions, name, instance, instance.MaintenanceWindowsAuthor, ct);
 
     /// <summary>
     /// Opens a window run, off the tick so a long backup cannot hold up every other instance's
@@ -171,6 +211,18 @@ internal sealed class MaintenanceRunner(
                 continue;
             }
 
+            // Judged at the moment it would run, not when the window was written: an author who has
+            // since lost the access stops their windows here. The rest of the window carries on — a
+            // backup nobody may take says nothing about the restart after it.
+            AutomationVerdict verdict = await AuthorizeAsync(implementation, name, instance, ct).ConfigureAwait(false);
+            if (!verdict.Allowed)
+            {
+                logger.LogWarning("{Instance}: {Window}/{Task} blocked — {Reason}",
+                    name, windowId, implementation.Name, verdict.Reason);
+                records.Add(new MaintenanceTaskRun(implementation.Name, MaintenanceOutcomes.Blocked, verdict.Reason));
+                continue;
+            }
+
             TaskGate gate;
             try
             {
@@ -247,14 +299,16 @@ internal sealed class MaintenanceRunner(
     /// </summary>
     /// <remarks>
     /// A failure anywhere makes the window a failure, because the tasks after it never ran. With
-    /// nothing failed, one task that did its work makes the window <c>ok</c>; a window where
-    /// nothing applied to the instance is <c>skipped</c>, which is a different sentence from a
-    /// window that tried and could not.
+    /// nothing failed, one task that did its work makes the window <c>ok</c>; a window held back
+    /// because nobody who may do it asked is <c>blocked</c>, which somebody has to act on; and a
+    /// window where nothing applied to the instance is <c>skipped</c>, which is a different sentence
+    /// from a window that tried and could not.
     /// </remarks>
     internal static string Verdict(IReadOnlyList<MaintenanceTaskRun> tasks)
     {
         if (tasks.Any(t => t.Outcome == MaintenanceOutcomes.Failed)) return MaintenanceOutcomes.Failed;
         if (tasks.Any(t => t.Outcome == MaintenanceOutcomes.Ok)) return MaintenanceOutcomes.Ok;
+        if (tasks.Any(t => t.Outcome == MaintenanceOutcomes.Blocked)) return MaintenanceOutcomes.Blocked;
         return MaintenanceOutcomes.Skipped;
     }
 

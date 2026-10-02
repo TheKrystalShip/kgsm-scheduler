@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using TheKrystalShip.KGSM;
 using TheKrystalShip.KGSM.Core.Interfaces;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
@@ -24,12 +25,24 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 /// interval into a per-minute wall-clock poll would mean carrying a "have I run this hour" flag
 /// through a loop shaped for something else.
 /// </summary>
+/// <remarks>
+/// <b>Switching it on is authoring it.</b> <c>updateCheckEnabled</c> is an automation setting, so the
+/// account that last set it is recorded beside it, and each server is checked only while both this
+/// daemon's service account and that person may read it — read at every sweep, so somebody who loses
+/// the access stops the sweep they switched on. A sweep nobody is recorded as having switched on checks
+/// nothing, and says so on each server.
+/// </remarks>
 internal sealed class UpdateCheckSweep(
     IInstanceService instances,
     IOptions<SchedulerOptions> options,
     ScheduleRegistry registry,
+    AutomationAccess access,
+    Func<string?> author,
     ILogger<UpdateCheckSweep> logger) : BackgroundService
 {
+    /// <summary>The setting that switches the sweep on, as its descriptor key: what its author is recorded under.</summary>
+    public const string SettingKey = "updateCheckEnabled";
+
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!options.Value.UpdateCheckEnabled)
@@ -71,10 +84,26 @@ internal sealed class UpdateCheckSweep(
         var now = DateTimeOffset.UtcNow;
         var stagger = TimeSpan.FromSeconds(options.Value.UpdateCheckStaggerSeconds);
         bool first = true;
+        string? switchedOnBy = author();
 
-        foreach (var name in all.Keys)
+        foreach (var (name, instance) in all)
         {
             if (ct.IsCancellationRequested) return;
+
+            AutomationVerdict verdict = await access
+                .DecideAsync([KgsmActions.ServerRead], name, instance, switchedOnBy, ct)
+                .ConfigureAwait(false);
+            if (!verdict.Allowed)
+            {
+                logger.LogInformation("{Instance}: not checking for updates — {Reason}", name, verdict.Reason);
+                registry.Update(name, s => s with
+                {
+                    LastUpdateCheckUtc = DateTimeOffset.UtcNow,
+                    LastUpdateCheckOk = false,
+                    LastUpdateCheckMessage = $"blocked: {verdict.Reason}",
+                });
+                continue;
+            }
 
             if (WasCheckedRecently(recorded.TryGetValue(name, out var last) ? last : null, now,
                     options.Value.UpdateCheckIntervalMinutes))

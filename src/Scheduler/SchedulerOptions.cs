@@ -31,6 +31,10 @@ internal sealed class SchedulerOptions
     /// <summary>Where a configuration change made through the Control Panel is written.</summary>
     public string ConfigOverridePath { get; init; } = "/var/lib/kgsm-api/leaf-overrides/scheduler.env";
     public string StateDirectory { get; init; } = "/var/lib/kgsm-scheduler";
+    /// <summary>The node's authority replica, read and never written.</summary>
+    public string AuthorityReplicaPath { get; init; } = "/var/lib/kgsm/auth/users.db";
+    /// <summary>The host file the node names itself in.</summary>
+    public string ProviderFilePath { get; init; } = "/var/lib/kgsm/cluster/auth-provider.json";
     /// <summary>How often to re-scan instance schedule config (seconds). At least <see cref="MinPollIntervalSeconds"/>.</summary>
     public int PollIntervalSeconds { get; init; } = 60;
     /// <summary>
@@ -52,8 +56,11 @@ internal sealed class SchedulerOptions
     /// </summary>
     public bool AllowDisruptiveTasks { get; init; } = true;
 
-    /// <summary>Whether to sweep the roster for newer game builds at all.</summary>
-    public bool UpdateCheckEnabled { get; init; } = true;
+    /// <summary>
+    /// Whether to sweep the roster for newer game builds at all. Off until somebody switches it on,
+    /// who becomes its author.
+    /// </summary>
+    public bool UpdateCheckEnabled { get; init; }
 
     /// <summary>
     /// How often the whole roster is swept (minutes). Hourly by default: a game release is not a
@@ -85,6 +92,8 @@ internal sealed class SchedulerOptions
             SurfaceSocketPath = Or(s.SurfaceSocketPath, defaults.SurfaceSocketPath),
             ConfigOverridePath = Or(s.ConfigOverridePath, defaults.ConfigOverridePath),
             StateDirectory = Or(s.StateDirectory, defaults.StateDirectory),
+            AuthorityReplicaPath = Or(s.AuthorityReplicaPath, defaults.AuthorityReplicaPath),
+            ProviderFilePath = Or(s.ProviderFilePath, defaults.ProviderFilePath),
             PollIntervalSeconds = Math.Max(s.PollIntervalSeconds ?? defaults.PollIntervalSeconds, MinPollIntervalSeconds),
             GraceWindowMinutes = Math.Max(s.GraceWindowMinutes ?? defaults.GraceWindowMinutes, 0),
             MinimumWindowPeriodMinutes = Math.Max(

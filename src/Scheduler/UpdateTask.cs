@@ -36,6 +36,8 @@ internal sealed class UpdateTask(IOptions<SchedulerOptions> options, ILogger<Upd
     /// <summary>The server is down for the length of the update, so a window carrying this is announced.</summary>
     public bool IsDisruptive => true;
 
+    public IReadOnlyList<string> Actions { get; } = [TheKrystalShip.KGSM.KgsmActions.ServerUpdate];
+
     /// <summary>
     /// Dispatches only on the engine's recorded evidence that a newer build stands.
     /// </summary>

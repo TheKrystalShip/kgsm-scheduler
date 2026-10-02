@@ -9,7 +9,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
-    <Version>3.3.2</Version>
+    <Version>4.0.0</Version>
 
     <!-- The leaf config descriptor is generated from SchedulerSettings. These name the two files the
          generator works between; the attribute source, the documentation file the <panel> tags travel
@@ -21,19 +21,24 @@
   <ItemGroup>
     <!-- Build-only: the descriptor attributes arrive as source and the generator as a tool, and the
          package declares no dependencies, so nothing here reaches the AOT publish. -->
-    <PackageReference Include="TheKrystalShip.KGSM.ComponentConfig" Version="3.0.0" PrivateAssets="all" />
+    <PackageReference Include="TheKrystalShip.KGSM.ComponentConfig" Version="3.2.0-dev.2" PrivateAssets="all" />
 
     <!-- What this daemon answers about ITSELF with: its descriptor, the deploy floors under it, the
          override file, its journal and its unit. The transport half maps those onto the routes every
          component serves them at, so this leaf and an anchor answer the same questions the same way. -->
-    <PackageReference Include="TheKrystalShip.KGSM.ComponentSurface" Version="1.0.0-dev.8" />
-    <PackageReference Include="TheKrystalShip.KGSM.ComponentSurface.Http" Version="1.0.0-dev.5" />
+    <PackageReference Include="TheKrystalShip.KGSM.ComponentSurface" Version="1.0.0-dev.10" />
+    <PackageReference Include="TheKrystalShip.KGSM.ComponentSurface.Http" Version="1.0.0-dev.6" />
   </ItemGroup>
   <ItemGroup>
     <!-- Configuration, hosting, logging and options all arrive with the ASP.NET Core framework
          reference the Web SDK carries, so naming them here would pin a second copy of what is
          already in the shared framework. -->
-    <PackageReference Include="TheKrystalShip.KGSM.Lib" Version="8.0.0" />
+    <PackageReference Include="TheKrystalShip.KGSM.Lib" Version="8.10.0-dev.5" />
+
+    <!-- The cluster's authority, read off the replica the node on this machine keeps: every window
+         and every sweep runs only where both this daemon's service account and the person who
+         switched it on may do what it does. -->
+    <PackageReference Include="TheKrystalShip.KGSM.Auth.Cluster" Version="1.0.0-dev.19" />
   </ItemGroup>
 
   <ItemGroup>

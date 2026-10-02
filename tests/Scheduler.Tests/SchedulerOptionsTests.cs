@@ -32,7 +32,8 @@ public class SchedulerOptionsTests
         Assert.Equal("/var/lib/kgsm-api/leaf-overrides/scheduler.env", o.ConfigOverridePath);
         Assert.Equal(60, o.PollIntervalSeconds);
         Assert.Equal(10, o.GraceWindowMinutes);
-        Assert.True(o.UpdateCheckEnabled);
+        // Automated behaviour is off until a person switches it on and becomes its author.
+        Assert.False(o.UpdateCheckEnabled);
         Assert.Equal(60, o.UpdateCheckIntervalMinutes);
         Assert.Equal(5, o.UpdateCheckStaggerSeconds);
         Assert.Equal(10, o.MinimumWindowPeriodMinutes);
@@ -64,9 +65,9 @@ public class SchedulerOptionsTests
     // update is ever announced. A default that could not be turned off would make the daemon
     // generate traffic an operator cannot stop.
     [Fact]
-    public void Update_checks_can_be_turned_off()
+    public void Update_checks_can_be_turned_on()
     {
-        Assert.False(Bind((nameof(SchedulerSettings.UpdateCheckEnabled), "false")).UpdateCheckEnabled);
+        Assert.True(Bind((nameof(SchedulerSettings.UpdateCheckEnabled), "true")).UpdateCheckEnabled);
     }
 
     // Same floor reasoning as the poll interval: the sweep drives a timer with this period, and the
@@ -142,9 +143,9 @@ public class SchedulerOptionsTests
 
         Assert.Equal(60, o.PollIntervalSeconds);
         Assert.Equal(10, o.GraceWindowMinutes);
-        // Blank must not read as "off" — a stray line in an env file would silently stop this host
-        // ever looking for an update, and nothing would say so.
-        Assert.True(o.UpdateCheckEnabled);
+        // Blank must not read as "on" — a stray line in an env file would start an automation nobody
+        // switched on, with nobody to answer for it.
+        Assert.False(o.UpdateCheckEnabled);
         Assert.Equal(60, o.UpdateCheckIntervalMinutes);
         Assert.Equal(5, o.UpdateCheckStaggerSeconds);
         Assert.Equal(10, o.MinimumWindowPeriodMinutes);

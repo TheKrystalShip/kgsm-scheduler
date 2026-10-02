@@ -125,6 +125,7 @@ internal sealed class InstanceServiceStub : IInstanceService
     public KgsmResult GetInstanceConfigValue(string instanceName, string key) => Unused<KgsmResult>();
     public List<InstanceConfigEntry>? GetInstanceConfig(string instanceName, bool settableOnly = false) => Unused<List<InstanceConfigEntry>?>();
     public KgsmResult SetInstanceConfigValue(string instanceName, string key, string value, string? actor = null, string? origin = null) => Unused<KgsmResult>();
+    public KgsmResult SetMaintenanceWindows(string instanceName, string packedWindows, string? author, string? actor = null, string? origin = null) => Unused<KgsmResult>();
     public KgsmResult SetDisplayName(string instanceId, string displayName, string? actor = null, string? origin = null) => Unused<KgsmResult>();
     public InstanceNoteResult SetInstanceNote(string instanceName, string body, string? actor = null, string? origin = null) => Unused<InstanceNoteResult>();
     public Task<LogSubscription> SubscribeToLogsAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<LogSubscription>>();

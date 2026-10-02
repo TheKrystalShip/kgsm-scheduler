@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "component": "scheduler",
+  "version": "4.0.0",
+  "actions": [
+    {
+      "id": "config.read",
+      "title": "Read Scheduler settings",
+      "effect": "read",
+      "scope": "node"
+    },
+    {
+      "id": "config.write",
+      "title": "Change Scheduler settings",
+      "effect": "write",
+      "scope": "node"
+    },
+    {
+      "id": "journal.read",
+      "title": "Read Scheduler logs",
+      "effect": "read",
+      "scope": "node"
+    },
+    {
+      "id": "lifecycle.restart",
+      "title": "Restart Scheduler",
+      "effect": "execute",
+      "scope": "node"
+    },
+    {
+      "id": "windows.read",
+      "title": "See the maintenance schedule and what last ran",
+      "effect": "read",
+      "scope": "node"
+    },
+    {
+      "id": "windows.write",
+      "title": "Postpone, skip or run a maintenance window now",
+      "effect": "execute",
+      "scope": "node"
+    }
+  ],
+  "requires": [
+    {
+      "action": "kgsm:server.announce",
+      "scope": "instance",
+      "why": "Warn the players on a server before a maintenance window interrupts them"
+    },
+    {
+      "action": "kgsm:server.backups.create",
+      "scope": "instance",
+      "why": "Take the backups a maintenance window asks for"
+    },
+    {
+      "action": "kgsm:server.backups.manage",
+      "scope": "instance",
+      "why": "Prune old backups to the retention a server keeps, after a scheduled backup lands"
+    },
+    {
+      "action": "kgsm:server.read",
+      "scope": "instance",
+      "why": "Read each server's maintenance windows, run state and update evidence on every poll"
+    },
+    {
+      "action": "kgsm:server.restart",
+      "scope": "instance",
+      "why": "Restart a server in a maintenance window"
+    },
+    {
+      "action": "kgsm:server.update",
+      "scope": "instance",
+      "why": "Apply a newer game build in a maintenance window"
+    }
+  ]
+}

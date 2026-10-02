@@ -17,8 +17,23 @@ public sealed class MaintenanceRunnerTests : IDisposable
     private readonly InstanceServiceStub _instances = new();
     private readonly WatchdogClientStub _watchdog = WatchdogClientStub.Answering(WatchdogClientStub.Running(Name));
     private readonly ScheduleRegistry _registry = new();
+    private readonly TestAuthority _authority = new();
+    private readonly string _author;
 
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
+    public MaintenanceRunnerTests()
+    {
+        // The author of every window in these tests, holding everything a window can do on this node,
+        // unless a test says otherwise.
+        _author = _authority.Person("alice");
+        _authority.Grant(_author, TheKrystalShip.KGSM.Auth.Access.AccessScope.ForNode(TestAuthority.Node),
+            TestAuthority.Required);
+    }
+
+    public void Dispose()
+    {
+        _authority.Dispose();
+        Directory.Delete(_dir, recursive: true);
+    }
 
     private static readonly MaintenanceTaskCatalog Catalog = new([
         new BackupTask(NullLogger<BackupTask>.Instance),
@@ -26,19 +41,22 @@ public sealed class MaintenanceRunnerTests : IDisposable
         new RestartTask(NullLogger<RestartTask>.Instance),
     ]);
 
-    private static Instance NewInstance(InstanceRuntime runtime = InstanceRuntime.Native) => new()
+    private Instance NewInstance(InstanceRuntime runtime = InstanceRuntime.Native) => NewInstance(_author, runtime);
+
+    private static Instance NewInstance(string? author, InstanceRuntime runtime = InstanceRuntime.Native) => new()
     {
         Name = Name,
         DisplayName = "Factorio",
         Runtime = runtime,
         BackupRetention = 5,
+        MaintenanceWindowsAuthor = author,
     };
 
     private static ReadWindow Read(string expression) =>
         WindowPlanner.Read(MaintenanceWindowParser.ParseWindow(expression), Catalog, 10,
             TimeZoneInfo.Utc, DateTime.UtcNow);
 
-    private MaintenanceRunner NewRunner(bool allowDisruptive = true)
+    private MaintenanceRunner NewRunner(bool allowDisruptive = true, TestAuthority? authority = null)
     {
         var options = Options.Create(new SchedulerOptions { AllowDisruptiveTasks = allowDisruptive });
         var announcer = new WindowAnnouncer(
@@ -46,8 +64,8 @@ public sealed class MaintenanceRunnerTests : IDisposable
             new PendingAnnouncementStore(_dir, NullLogger.Instance),
             NullLogger<WindowAnnouncer>.Instance);
 
-        return new MaintenanceRunner(_instances, _watchdog, _registry, Catalog, announcer, options,
-            NullLogger<MaintenanceRunner>.Instance);
+        return new MaintenanceRunner(_instances, _watchdog, _registry, Catalog, announcer,
+            (authority ?? _authority).Access(), options, NullLogger<MaintenanceRunner>.Instance);
     }
 
     /// <summary>Seeds the registry the way a tick does, so a run has a window to record against.</summary>
@@ -64,10 +82,13 @@ public sealed class MaintenanceRunnerTests : IDisposable
         _registry.Set(Name, new ScheduleState { Windows = windows });
     }
 
-    private async Task<MaintenanceRun?> RunAsync(MaintenanceRunner runner, string expression)
+    private Task<MaintenanceRun?> RunAsync(MaintenanceRunner runner, string expression) =>
+        RunAsync(runner, expression, NewInstance());
+
+    private async Task<MaintenanceRun?> RunAsync(MaintenanceRunner runner, string expression, Instance instance)
     {
         ReadWindow read = Read(expression);
-        runner.Fire(Name, NewInstance(), read);
+        runner.Fire(Name, instance, read);
 
         for (int i = 0; i < 200; i++)
         {
@@ -238,7 +259,7 @@ public sealed class MaintenanceRunnerTests : IDisposable
             _instances, WatchdogClientStub.Answering(null), _registry, Catalog,
             new WindowAnnouncer(_instances, _watchdog,
                 new PendingAnnouncementStore(_dir, NullLogger.Instance), NullLogger<WindowAnnouncer>.Instance),
-            Options.Create(new SchedulerOptions()), NullLogger<MaintenanceRunner>.Instance);
+            _authority.Access(), Options.Create(new SchedulerOptions()), NullLogger<MaintenanceRunner>.Instance);
 
         Plan("daily@04:00/backup,restart");
 
@@ -272,14 +293,93 @@ public sealed class MaintenanceRunnerTests : IDisposable
     /// known before the first mark comes due.
     /// </summary>
     [Fact]
-    public void A_window_with_nothing_that_can_disturb_anybody_is_not_announced()
+    public async Task A_window_with_nothing_that_can_disturb_anybody_is_not_announced()
     {
         ReadWindow window = Read("daily@04:00/backup,restart");
 
-        Assert.Empty(NewRunner(allowDisruptive: false).DisruptiveTasks(window, NewInstance()));
-        Assert.Empty(NewRunner().DisruptiveTasks(window, NewInstance(InstanceRuntime.Container)));
-        Assert.Empty(NewRunner().DisruptiveTasks(Read("daily@05:00/backup"), NewInstance()));
-        Assert.Equal([MaintenanceTask.Restart], NewRunner().DisruptiveTasks(window, NewInstance()));
+        Assert.Empty(await NewRunner(allowDisruptive: false).DisruptiveTasksAsync(Name, window, NewInstance(), default));
+        Assert.Empty(await NewRunner().DisruptiveTasksAsync(Name, window, NewInstance(InstanceRuntime.Container), default));
+        Assert.Empty(await NewRunner().DisruptiveTasksAsync(Name, Read("daily@05:00/backup"), NewInstance(), default));
+        Assert.Equal([MaintenanceTask.Restart], await NewRunner().DisruptiveTasksAsync(Name, window, NewInstance(), default));
+    }
+
+    // ---- who may have it run -----------------------------------------------
+
+    /// <summary>
+    /// Windows nobody is recorded as having written run nothing — every task is blocked, the window
+    /// says why, and nothing reaches the engine or the watchdog. A countdown is never opened for them.
+    /// </summary>
+    [Fact]
+    public async Task A_window_with_no_author_runs_nothing()
+    {
+        Plan("daily@04:00/backup,restart");
+
+        MaintenanceRun? run = await RunAsync(NewRunner(), "daily@04:00/backup,restart", NewInstance(author: null));
+
+        Assert.Equal(MaintenanceOutcomes.Blocked, run!.Outcome);
+        Assert.All(run.Tasks, t => Assert.Equal(MaintenanceOutcomes.Blocked, t.Outcome));
+        Assert.Contains("nobody is recorded", run.Tasks[0].Message);
+        Assert.Empty(_watchdog.Restarts);
+        Assert.Empty(await NewRunner().DisruptiveTasksAsync(
+            Name, Read("daily@04:00/backup,restart"), NewInstance(author: null), default));
+    }
+
+    /// <summary>
+    /// A window restarts only what its author could restart by hand. Holding the backup and not the
+    /// restart runs the backup and blocks the restart, naming the author.
+    /// </summary>
+    [Fact]
+    public async Task An_author_without_the_restart_gets_the_backup_and_not_the_restart()
+    {
+        string bob = _authority.Person("bob");
+        _authority.Grant(bob, TheKrystalShip.KGSM.Auth.Access.AccessScope.ForNode(TestAuthority.Node),
+            TheKrystalShip.KGSM.KgsmActions.ServerBackupsCreate, TheKrystalShip.KGSM.KgsmActions.ServerBackupsManage);
+        Plan("daily@04:00/backup,restart");
+
+        MaintenanceRun? run = await RunAsync(NewRunner(), "daily@04:00/backup,restart", NewInstance(bob));
+
+        Assert.Equal(MaintenanceOutcomes.Ok, run!.Outcome);
+        Assert.Equal(
+            [("backup", MaintenanceOutcomes.Ok), ("restart", MaintenanceOutcomes.Blocked)],
+            run.Tasks.Select(t => (t.Name, t.Outcome)));
+        Assert.Contains("bob", run.Tasks[1].Message);
+        Assert.Empty(_watchdog.Restarts);
+    }
+
+    /// <summary>
+    /// The author's access never lends the daemon reach it was not approved for: a requirement the
+    /// node does not report — or an Owner revoked — blocks the task whoever wrote the window.
+    /// </summary>
+    [Fact]
+    public async Task The_daemons_own_account_must_hold_it_too()
+    {
+        using var authority = new TestAuthority(
+            TestAuthority.Required.Where(a => a != TheKrystalShip.KGSM.KgsmActions.ServerRestart));
+        string owner = authority.Person("carol");
+        authority.Grant(owner, TheKrystalShip.KGSM.Auth.Access.AccessScope.Cluster, TestAuthority.Required);
+        Plan("daily@04:00/restart");
+
+        MaintenanceRun? run = await RunAsync(
+            NewRunner(authority: authority), "daily@04:00/restart", NewInstance(owner));
+
+        Assert.Equal(MaintenanceOutcomes.Blocked, run!.Outcome);
+        Assert.Contains("own account", run.Tasks[0].Message);
+    }
+
+    /// <summary>A replica nothing has written is "cannot tell", and cannot tell blocks.</summary>
+    [Fact]
+    public async Task A_replica_that_cannot_be_read_blocks()
+    {
+        var unreadable = new AutomationAccess(
+            new TheKrystalShip.KGSM.Auth.Cluster.MemberAccess(new TheKrystalShip.KGSM.Auth.Cluster.AuthorityReplicaFile(
+                Path.Combine(_dir, "absent.db"), NullLogger<TheKrystalShip.KGSM.Auth.Cluster.AuthorityReplicaFile>.Instance)),
+            () => TestAuthority.Node);
+
+        AutomationVerdict verdict = await unreadable.DecideAsync(
+            [TheKrystalShip.KGSM.KgsmActions.ServerRestart], Name, NewInstance(), _author, default);
+
+        Assert.False(verdict.Allowed);
+        Assert.Contains("could not be read", verdict.Reason);
     }
 
     /// <summary>
@@ -287,10 +387,10 @@ public sealed class MaintenanceRunnerTests : IDisposable
     /// are told one sentence rather than two.
     /// </summary>
     [Fact]
-    public void A_window_carrying_an_update_announces_it_as_updating_and_restarting()
+    public async Task A_window_carrying_an_update_announces_it_as_updating_and_restarting()
     {
-        IReadOnlyList<MaintenanceTask> disruptive =
-            NewRunner().DisruptiveTasks(Read("daily@04:00/backup,update,restart"), NewInstance());
+        IReadOnlyList<MaintenanceTask> disruptive = await NewRunner().DisruptiveTasksAsync(
+            Name, Read("daily@04:00/backup,update,restart"), NewInstance(), default);
 
         Assert.Equal([MaintenanceTask.Update, MaintenanceTask.Restart], disruptive);
         Assert.Equal("updating and restarting", AnnouncementPlan.Reason(disruptive));

@@ -21,6 +21,8 @@ internal sealed class RestartTask(ILogger<RestartTask> logger) : IMaintenanceTas
     /// <summary>Everyone connected is disconnected, so a window carrying this is announced.</summary>
     public bool IsDisruptive => true;
 
+    public IReadOnlyList<string> Actions { get; } = [TheKrystalShip.KGSM.KgsmActions.ServerRestart];
+
     /// <summary>
     /// A bounce already delivered needs no state re-assert: the instance is up because this window
     /// itself brought it back.

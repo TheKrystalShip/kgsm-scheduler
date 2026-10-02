@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using TheKrystalShip.KGSM.Auth.Cluster;
 using TheKrystalShip.KGSM.ComponentSurface;
 using TheKrystalShip.KGSM.ComponentSurface.Http;
 using TheKrystalShip.KGSM.Extensions;
@@ -93,8 +94,27 @@ internal sealed class Program
         builder.Services.AddSingleton<WindowAnnouncer>();
         builder.Services.AddSingleton<MaintenanceRunner>();
 
+        // Whether a window or a sweep may run: this daemon's own service account and the person who
+        // switched it on, evaluated together from the replica the node on this machine keeps, which
+        // this daemon reads and never writes. The node it is on — and so its own account — is the
+        // member id that node writes into the host file.
+        builder.Services.AddSingleton<IReplicatedAuthority>(sp => new AuthorityReplicaFile(
+            options.AuthorityReplicaPath, sp.GetRequiredService<ILogger<AuthorityReplicaFile>>()));
+        builder.Services.AddSingleton<MemberAccess>();
+        builder.Services.AddSingleton(sp => new HostSessionKeys(
+            options.ProviderFilePath, sp.GetRequiredService<ILogger<HostSessionKeys>>()));
+        builder.Services.AddSingleton(sp => new AutomationAccess(
+            sp.GetRequiredService<MemberAccess>(),
+            () => sp.GetRequiredService<HostSessionKeys>().Node));
+
         builder.Services.AddHostedService<SchedulerEngine>();
-        builder.Services.AddHostedService<UpdateCheckSweep>();
+        builder.Services.AddHostedService(sp => new UpdateCheckSweep(
+            sp.GetRequiredService<IInstanceService>(),
+            sp.GetRequiredService<IOptions<SchedulerOptions>>(),
+            sp.GetRequiredService<ScheduleRegistry>(),
+            sp.GetRequiredService<AutomationAccess>(),
+            () => sp.GetRequiredService<ComponentAutomationAuthors>().AuthorOf(UpdateCheckSweep.SettingKey),
+            sp.GetRequiredService<ILogger<UpdateCheckSweep>>()));
         builder.Services.AddSingleton<WindowControl>();
 
         // Server to client only, and only over a unix socket — no TCP anywhere. Nothing off this host
@@ -131,6 +151,10 @@ internal sealed class Program
             ComponentSurfacePaths.Descriptor(ComponentId),
             options.ConfigOverridePath,
             ComponentSurfacePaths.Commands(ComponentId)));
+
+        // Who is changing a setting, as the node's API relays it on the surface socket — which only that
+        // API can open. Recorded as the author of an automation setting such as the update sweep.
+        builder.Services.AddSingleton<IComponentCaller, RelayedComponentCaller>();
 
         WebApplication host = builder.Build();
 

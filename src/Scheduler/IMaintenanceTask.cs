@@ -123,6 +123,12 @@ internal interface IMaintenanceTask
     bool IsDisruptive { get; }
 
     /// <summary>
+    /// The engine actions running this performs. A window's task runs only while both this daemon's
+    /// service account and the window's author hold every one of them at the server.
+    /// </summary>
+    IReadOnlyList<string> Actions { get; }
+
+    /// <summary>
     /// Decides, immediately before dispatch, whether this task still applies to the instance in
     /// front of it.
     /// </summary>

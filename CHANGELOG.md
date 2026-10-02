@@ -4,6 +4,34 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — every window and every sweep runs as author ∩ service (4.0.0)
+
+**Breaking.** Nothing this daemon does runs on authority nobody chose:
+
+- **A window's task runs only while both `svc:scheduler@<node>` and the window's author hold its
+  actions at the server**, evaluated from the node's authority replica at the moment it would run.
+  The author is `maintenance_windows_author`, which the engine (`3.18.0-rc29`) records with the
+  windows and clears on any write that names nobody. Each task names its actions (`backup`:
+  `kgsm:server.backups.create` and `.manage`; `update`: `kgsm:server.update`; `restart`:
+  `kgsm:server.restart`). A task refused is recorded `blocked` with whose access and which action, and
+  the window carries on; windows with no author run nothing.
+- **Windows show it before they are due**: each window's status carries `author` and `blocked`, and a
+  disruptive task that would be blocked is not announced.
+- **`updateCheckEnabled` is an automation setting, off by default** (`[Automates]`). Whoever switches it
+  on through the Control Panel is recorded as its author, and each server is checked only while both
+  this daemon's account and that person may read it; a refusal is recorded on the server.
+- **The actions it declares**: `scheduler:windows.read` and `scheduler:windows.write`, which kgsm-api
+  checks before relaying to the socket. **What its service account requires**: server reads, backups
+  create and manage, update, restart and announce — written to
+  `deploy/kgsm-scheduler.leaf.actions.json` by `ComponentConfig` 3.2 and installed into
+  `/var/lib/kgsm/leaves/actions/scheduler.json` by `deploy.sh` (synced with the template) and the
+  package.
+- **The command manifest is schema 3**, each verb naming `scheduler:windows.write`.
+- New settings `AuthorityReplicaPath` and `ProviderFilePath`; the surface records setting authors from
+  the `Kgsm-Acting-Account` the node's API relays.
+- Pins: `TheKrystalShip.KGSM.Lib` 8.10.0-dev.5, `Auth.Cluster` 1.0.0-dev.19, `ComponentConfig`
+  3.2.0-dev.2, `ComponentSurface` 1.0.0-dev.10, `ComponentSurface.Http` 1.0.0-dev.6.
+
 ### Fixed — a setting whose source this component could not read reports as unknown (3.3.2)
 
 `ComponentSurface` 1.0.0-dev.8 carries whether every declared floor source was actually read, and reads

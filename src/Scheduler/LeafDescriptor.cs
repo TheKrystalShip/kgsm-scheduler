@@ -12,6 +12,13 @@ using TheKrystalShip.KGSM.ComponentConfig;
     role: "Runs each server's maintenance windows — backups and restarts, in order, announced and "
         + "exclusive — and sweeps the roster for newer game builds.")]
 
+// What a person may do with this daemon's schedule, through the node's API: the API checks them before
+// it relays to the socket, so they are declared here, where they are performed, and checked there.
+[assembly: Action("scheduler:windows.read", "See the maintenance schedule and what last ran",
+    DeclaredEffect.Read, DeclaredScope.Node)]
+[assembly: Action("scheduler:windows.write", "Postpone, skip or run a maintenance window now",
+    DeclaredEffect.Execute, DeclaredScope.Node)]
+
 [assembly: ConfigGroup("general", "General", 1)]
 [assembly: ConfigGroup("wiring", "Connections", 2)]
 [assembly: ConfigGroup("timing", "Timing", 3)]
