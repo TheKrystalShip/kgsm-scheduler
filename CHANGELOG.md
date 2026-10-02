@@ -4,6 +4,11 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Added — the config surface says who switched the update sweep on (4.0.1)
+
+The served configuration marks `updateCheckEnabled` as an automation and names the account recorded
+as having switched it on (ComponentSurface 1.0.0-dev.11).
+
 ### Changed — every window and every sweep runs as author ∩ service (4.0.0)
 
 **Breaking.** Nothing this daemon does runs on authority nobody chose:

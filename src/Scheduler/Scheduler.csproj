@@ -9,7 +9,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
-    <Version>4.0.0</Version>
+    <Version>4.0.1</Version>
 
     <!-- The leaf config descriptor is generated from SchedulerSettings. These name the two files the
          generator works between; the attribute source, the documentation file the <panel> tags travel
@@ -26,8 +26,8 @@
     <!-- What this daemon answers about ITSELF with: its descriptor, the deploy floors under it, the
          override file, its journal and its unit. The transport half maps those onto the routes every
          component serves them at, so this leaf and an anchor answer the same questions the same way. -->
-    <PackageReference Include="TheKrystalShip.KGSM.ComponentSurface" Version="1.0.0-dev.10" />
-    <PackageReference Include="TheKrystalShip.KGSM.ComponentSurface.Http" Version="1.0.0-dev.6" />
+    <PackageReference Include="TheKrystalShip.KGSM.ComponentSurface" Version="1.0.0-dev.11" />
+    <PackageReference Include="TheKrystalShip.KGSM.ComponentSurface.Http" Version="1.0.0-dev.7" />
   </ItemGroup>
   <ItemGroup>
     <!-- Configuration, hosting, logging and options all arrive with the ASP.NET Core framework
