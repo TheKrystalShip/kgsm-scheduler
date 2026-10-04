@@ -4,6 +4,11 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Fixed — tks-auth's journal is read (4.1.2)
+
+- Built on `TheKrystalShip.KGSM.Lib` 9.1.0, whose journal scan finds the organization's `tks-`
+  services beside the ecosystem's.
+
 ### Changed — built on tks-auth's packages (4.1.1)
 
 - `TheKrystalShip.Auth.Cluster` 2.0.0, the auth package under its new id. The namespaces follow. No
