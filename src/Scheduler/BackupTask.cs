@@ -23,7 +23,7 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 internal sealed class BackupTask(ILogger<BackupTask> logger) : IMaintenanceTask
 {
     /// <summary>The retention used when the instance declares none.</summary>
-    private const int DefaultRetention = 5;
+    private const int DefaultRetention = 3;
 
     public string Name => MaintenanceTask.Backup.ToToken();
 

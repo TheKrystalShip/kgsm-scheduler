@@ -4,6 +4,11 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — a backup task keeps three archives by default (4.1.0)
+
+An instance that declares no `backup_retention` has its scheduled backups pruned to the three most
+recent prunable archives, matching the engine's own default.
+
 ### Changed — built on released packages (4.0.2)
 
 Pinned to `Lib` 9.0.0, `Auth.Cluster` 1.0.0, `ComponentConfig` 3.2.0, and `ComponentSurface` and

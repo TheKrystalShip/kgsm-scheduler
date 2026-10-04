@@ -68,7 +68,7 @@ kgsm config and is read fresh on every poll:
 | `maintenance_windows` | the windows themselves, packed — `daily@05:00/backup;weekly.sun@04:00/backup,update,restart` |
 | `maintenance_windows_author` | the account that wrote them, which the engine records with the windows (`config-set … --author`) and nowhere else. A task runs only while both this daemon's service account and this author hold its action at the server; windows with no author run nothing |
 | `timezone` | the IANA zone an appointment's time of day is read in. Intervals ignore it |
-| `backup_retention` | how many prunable archives a `backup` task keeps |
+| `backup_retention` | how many prunable archives a `backup` task keeps; 3 when the instance declares none |
 | `announce_lead_minutes` | the lead times a window is announced at, e.g. `15,5,1` |
 | `announce_maintenance_message` | what is said, with `{instance}`, `{minutes}` and `{reason}` |
 | `announce_maintenance_cancelled_message` | what is said when an announced window does not happen |
