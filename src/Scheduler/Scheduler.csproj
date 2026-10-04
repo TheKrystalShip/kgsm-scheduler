@@ -9,7 +9,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
-    <Version>4.1.0</Version>
+    <Version>4.1.1</Version>
 
     <!-- The leaf config descriptor is generated from SchedulerSettings. These name the two files the
          generator works between; the attribute source, the documentation file the <panel> tags travel
@@ -38,7 +38,7 @@
     <!-- The cluster's authority, read off the replica the node on this machine keeps: every window
          and every sweep runs only where both this daemon's service account and the person who
          switched it on may do what it does. -->
-    <PackageReference Include="TheKrystalShip.KGSM.Auth.Cluster" Version="1.0.0" />
+    <PackageReference Include="TheKrystalShip.Auth.Cluster" Version="2.0.0" />
   </ItemGroup>
 
   <ItemGroup>

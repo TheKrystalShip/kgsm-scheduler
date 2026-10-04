@@ -4,6 +4,11 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — built on tks-auth's packages (4.1.1)
+
+- `TheKrystalShip.Auth.Cluster` 2.0.0, the auth package under its new id. The namespaces follow. No
+  behaviour changes.
+
 ### Changed — a backup task keeps three archives by default (4.1.0)
 
 An instance that declares no `backup_retention` has its scheduled backups pruned to the three most

@@ -25,7 +25,7 @@ public sealed class MaintenanceRunnerTests : IDisposable
         // The author of every window in these tests, holding everything a window can do on this node,
         // unless a test says otherwise.
         _author = _authority.Person("alice");
-        _authority.Grant(_author, TheKrystalShip.KGSM.Auth.Access.AccessScope.ForNode(TestAuthority.Node),
+        _authority.Grant(_author, TheKrystalShip.Auth.Access.AccessScope.ForNode(TestAuthority.Node),
             TestAuthority.Required);
     }
 
@@ -332,7 +332,7 @@ public sealed class MaintenanceRunnerTests : IDisposable
     public async Task An_author_without_the_restart_gets_the_backup_and_not_the_restart()
     {
         string bob = _authority.Person("bob");
-        _authority.Grant(bob, TheKrystalShip.KGSM.Auth.Access.AccessScope.ForNode(TestAuthority.Node),
+        _authority.Grant(bob, TheKrystalShip.Auth.Access.AccessScope.ForNode(TestAuthority.Node),
             TheKrystalShip.KGSM.KgsmActions.ServerBackupsCreate, TheKrystalShip.KGSM.KgsmActions.ServerBackupsManage);
         Plan("daily@04:00/backup,restart");
 
@@ -356,7 +356,7 @@ public sealed class MaintenanceRunnerTests : IDisposable
         using var authority = new TestAuthority(
             TestAuthority.Required.Where(a => a != TheKrystalShip.KGSM.KgsmActions.ServerRestart));
         string owner = authority.Person("carol");
-        authority.Grant(owner, TheKrystalShip.KGSM.Auth.Access.AccessScope.Cluster, TestAuthority.Required);
+        authority.Grant(owner, TheKrystalShip.Auth.Access.AccessScope.Cluster, TestAuthority.Required);
         Plan("daily@04:00/restart");
 
         MaintenanceRun? run = await RunAsync(
