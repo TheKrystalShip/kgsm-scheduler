@@ -4,6 +4,11 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — built on released packages (4.0.2)
+
+Pinned to `Lib` 9.0.0, `Auth.Cluster` 1.0.0, `ComponentConfig` 3.2.0, and `ComponentSurface` and
+`ComponentSurface.Http` 1.0.0. No behaviour changes.
+
 ### Added — the config surface says who switched the update sweep on (4.0.1)
 
 The served configuration marks `updateCheckEnabled` as an automation and names the account recorded
