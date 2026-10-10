@@ -12,7 +12,7 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 ///
 /// This holds no answer and makes no judgement. It calls <c>check-update --emit</c> and the engine
 /// does the rest: kgsm fetches the upstream version, records it beside the instance, and emits
-/// <c>instance_update_available</c> for a version it has not announced before. What is kept here is
+/// <c>server.update.available</c> for a version it has not announced before. What is kept here is
 /// only the operational fact of having asked — when, and whether the ask succeeded — which is what
 /// lets a surface say when this host last looked instead of implying it looks continuously.
 ///
