@@ -15,6 +15,9 @@ ExecStart=/opt/kgsm-scheduler/kgsm-scheduler
 WorkingDirectory=/opt/kgsm-scheduler
 Restart=always
 RestartSec=5s
+# The sign-in provider (Sessions__Issuer, Sessions__Audience), set once per host for every component on
+# it and loaded before this daemon's own env file, which wins over it.
+EnvironmentFile=-/etc/kgsm/kgsm-cluster.env
 EnvironmentFile=-/etc/kgsm-scheduler/kgsm-scheduler.env
 RuntimeDirectory=kgsm-scheduler
 RuntimeDirectoryMode=0755

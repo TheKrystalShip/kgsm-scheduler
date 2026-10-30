@@ -25,22 +25,20 @@ standing plan. The grammar, parser and clock are kgsm-lib's (`TheKrystalShip.KGS
   `IInstanceService.CheckUpdate(name, emit: true)`, serial and staggered, because each server asks its
   own upstream and a parallel sweep is N simultaneous steamcmd logins. It skips anything the engine's
   `checked_at` shows checked within half the interval, so restarting the daemon does not re-ask every
-  upstream. It is off until a person switches it on: `updateCheckEnabled` is `[Automates]`, so the
-  surface records whoever sets it as its author (`ComponentAutomationAuthors`, from the account the
-  node's API relays as `Kgsm-Acting-Account`), and each server is checked only while this daemon's
-  service account and that author may both read it, asked at every sweep.
+  upstream. It is off until a person switches it on (`updateCheckEnabled`). It only reads, as
+  this daemon on its own host, so no person's access is consulted when it runs.
 - **Update availability is the engine's fact.** The sweep records nothing and compares no versions;
   `lastUpdateCheckUtc` on the status is the sweep's own attempt, not the engine's `checked_at`.
 
 ## The run (`MaintenanceRunner`)
 
 The run happens off the tick, and the instance's slot is claimed synchronously as the tick dispatches, so
-two windows of one instance coming due together resolve deterministically. Every task is authorized
-(`Auth.Cluster`'s `AutomationAccess`, the check the reactor also uses) against this daemon's service
-account `svc:scheduler@<node>` and the window's author, evaluated from the node's replica
-(`Scheduler:AuthorityReplicaPath`, read and never written). A replica that cannot be read, a node that has
-not named itself and a service account not yet created all block; running on a guess is the one thing an
-automation must not do. Outcomes are `ok`, `failed`, `skipped`, `aborted` and `blocked`; the window as a
+two windows of one instance coming due together resolve deterministically. The author is checked when
+the windows are saved, by whoever saves them (the token had to list every action the windows run); the
+engine records the author with the windows (`maintenance_windows_author`). At run time the daemon acts as
+itself and only requires that an author is recorded, so a role removed from the author stops nothing
+already saved. Windows with no author run nothing: every task is `blocked`, the status says why, and no
+countdown opens. Outcomes are `ok`, `failed`, `skipped`, `aborted` and `blocked`; the window as a
 whole is `failed` if any task failed, `ok` if any task did its work, `blocked` if a task was held back and
 none did its work, and `skipped` when nothing applied.
 
@@ -51,7 +49,6 @@ interface IMaintenanceTask
 {
     string Name { get; }                  // the grammar token
     bool IsDisruptive { get; }            // drives whether the window is announced
-    IReadOnlyList<string> Actions { get; } // what running it performs; author and service must hold each
     Task<TaskGate> GateAsync(Instance instance, IWatchdogClient watchdog, CancellationToken ct);
     Task<TaskOutcome> RunAsync(MaintenanceContext ctx, CancellationToken ct);
 }
@@ -91,8 +88,9 @@ empty roster).
 between ticks appears at the next one. A verb moves a standing target under the registry's lock and edits
 no schedule; the plan survives ticks because it is kept while its signature matches, and moving a target
 does not change the signature. A moved target is a different fire from the one anybody was warned about,
-so the engine retracts the warnings given and announces afresh. The verbs are `scheduler:windows.write`,
-checked by the caller (`kgsm-api` before it dials this); a unix socket carries no identity.
+so the engine retracts the warnings given and announces afresh. The verbs are `scheduler:windows.write`:
+the node relays the person's access token as a bearer and each route admits a token listing it
+(`KGSM.Sessions`, `Sessions__Issuer`/`Sessions__Audience`); with no issuer they answer `503`.
 
 ## Its own surface
 

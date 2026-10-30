@@ -7,7 +7,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TheKrystalShip.Auth.Cluster;
 using TheKrystalShip.KGSM.ComponentSurface;
 using TheKrystalShip.KGSM.ComponentSurface.Http;
 using TheKrystalShip.KGSM.Extensions;
@@ -15,6 +14,7 @@ using TheKrystalShip.Kgsm.Scheduler;
 using TheKrystalShip.Kgsm.Scheduler.Json;
 using TheKrystalShip.KGSM.Core.Interfaces;
 using TheKrystalShip.KGSM.Lifecycle;
+using TheKrystalShip.KGSM.Sessions;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -63,6 +63,17 @@ internal sealed class Program
         builder.Logging.AddSystemdConsole();
 
         builder.Services.AddSingleton<ScheduleRegistry>();
+
+        // The people the control routes admit. The node relays a person's access token over the socket and
+        // it is checked here against the keys of the provider named by Sessions__Issuer and
+        // Sessions__Audience; a route admits a token listing the route's action. With no issuer nothing
+        // can be verified, so the gated routes answer 503 rather than admit anyone.
+        SessionsSettings sessionSettings = builder.Configuration.GetSection(SessionsSettings.Section)
+            .Get<SessionsSettings>() ?? new SessionsSettings();
+        bool sessionsConfigured = !string.IsNullOrWhiteSpace(sessionSettings.Issuer);
+        if (sessionsConfigured)
+            builder.Services.AddKgsmSessions();
+
         builder.Services.AddSingleton(sp => new PendingAnnouncementStore(
             options.StateDirectory,
             sp.GetRequiredService<ILoggerFactory>().CreateLogger<PendingAnnouncementStore>()));
@@ -94,27 +105,11 @@ internal sealed class Program
         builder.Services.AddSingleton<WindowAnnouncer>();
         builder.Services.AddSingleton<MaintenanceRunner>();
 
-        // Whether a window or a sweep may run: this daemon's own service account and the person who
-        // switched it on, evaluated together from the replica the node on this machine keeps, which
-        // this daemon reads and never writes. The node it is on — and so its own account — is the
-        // member id that node writes into the host file.
-        builder.Services.AddSingleton<IReplicatedAuthority>(sp => new AuthorityReplicaFile(
-            options.AuthorityReplicaPath, sp.GetRequiredService<ILogger<AuthorityReplicaFile>>()));
-        builder.Services.AddSingleton<MemberAccess>();
-        builder.Services.AddSingleton(sp => new HostSessionKeys(
-            options.ProviderFilePath, sp.GetRequiredService<ILogger<HostSessionKeys>>()));
-        builder.Services.AddSingleton(sp => new AutomationAccess(
-            sp.GetRequiredService<MemberAccess>(),
-            ComponentId,
-            () => sp.GetRequiredService<HostSessionKeys>().Node));
-
         builder.Services.AddHostedService<SchedulerEngine>();
         builder.Services.AddHostedService(sp => new UpdateCheckSweep(
             sp.GetRequiredService<IInstanceService>(),
             sp.GetRequiredService<IOptions<SchedulerOptions>>(),
             sp.GetRequiredService<ScheduleRegistry>(),
-            sp.GetRequiredService<AutomationAccess>(),
-            () => sp.GetRequiredService<ComponentAutomationAuthors>().AuthorOf(UpdateCheckSweep.SettingKey),
             sp.GetRequiredService<ILogger<UpdateCheckSweep>>()));
         builder.Services.AddSingleton<WindowControl>();
 
@@ -153,11 +148,28 @@ internal sealed class Program
             options.ConfigOverridePath,
             ComponentSurfacePaths.Commands(ComponentId)));
 
-        // Who is changing a setting, as the node's API relays it on the surface socket — which only that
-        // API can open. Recorded as the author of an automation setting such as the update sweep.
-        builder.Services.AddSingleton<IComponentCaller, RelayedComponentCaller>();
-
         WebApplication host = builder.Build();
+
+        if (sessionsConfigured)
+        {
+            host.UseAuthentication();
+            host.UseAuthorization();
+        }
+        else
+        {
+            host.Use(async (context, next) =>
+            {
+                if (context.GetEndpoint()?.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.IAuthorizeData>() is not null)
+                {
+                    context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                    await context.Response.WriteAsync(
+                        "no sign-in provider is configured (Sessions__Issuer), so nobody can be admitted\n");
+                    return;
+                }
+
+                await next();
+            });
+        }
 
         // The last thing this daemon says. A consumer reading it knows the scheduler went away because
         // somebody stopped it, rather than because it died holding schedules nobody will now run.
@@ -195,14 +207,17 @@ internal sealed class Program
         // The three things this daemon can be told. Each is a route rather than a verb inside one
         // request body: the method already says whether something is being read or changed, and a
         // second dispatch layer under it would be one more place a verb can be spelled wrong.
+        //
+        // The node relays the person's access token, and each route admits a token listing
+        // scheduler:windows.write.
         host.MapPost("/windows/postpone", (HttpRequest request, WindowControl control, CancellationToken ct) =>
-            Told(request, ct, body => control.Postpone(body)));
+            Told(request, ct, body => control.Postpone(body))).RequireAction(SchedulerActionIds.WindowsWrite);
 
         host.MapPost("/windows/skip", (HttpRequest request, WindowControl control, CancellationToken ct) =>
-            Told(request, ct, body => control.Skip(body)));
+            Told(request, ct, body => control.Skip(body))).RequireAction(SchedulerActionIds.WindowsWrite);
 
         host.MapPost("/windows/run-now", (HttpRequest request, WindowControl control, CancellationToken ct) =>
-            Told(request, ct, body => control.RunNow(body)));
+            Told(request, ct, body => control.RunNow(body))).RequireAction(SchedulerActionIds.WindowsWrite);
 
         // What this daemon answers about itself, at the routes every component serves them at. No gate:
         // the socket's filesystem permissions are the boundary, and nothing else is on it.

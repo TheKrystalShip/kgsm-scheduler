@@ -36,14 +36,6 @@
     // The unit creates it (StateDirectory=kgsm-scheduler).
     "StateDirectory": "/var/lib/kgsm-scheduler",
 
-    // The node's replica of the cluster's authority, read and never written. A window runs only while
-    // both this service and the person who wrote it may do what it does, and a sweep only while both
-    // this service and the person who switched it on may read the server.
-    "AuthorityReplicaPath": "/var/lib/kgsm/auth/users.db",
-
-    // The host file the node on this machine names itself in, which names this service's account.
-    "ProviderFilePath": "/var/lib/kgsm/cluster/auth-provider.json",
-
     // How often each server's schedule is re-read from KGSM (seconds). This bounds how quickly a
     // schedule change takes effect; it does not affect the accuracy of a fire already scheduled.
     // Anything below 5 is raised to 5.
@@ -66,8 +58,7 @@
 
     // Whether to sweep every server for a newer game build. False means nothing on this host ever
     // asks upstream, so no update is announced — servers keep running exactly as they are. Off until
-    // somebody switches it on through the Control Panel, who is then recorded as its author: each
-    // server is checked only while both this service and that person may read it.
+    // somebody switches it on through the Control Panel.
     "UpdateCheckEnabled": false,
 
     // How often the whole roster is swept (minutes). A game release is not a fast-moving fact and
@@ -78,6 +69,14 @@
     // Pause between one server's check and the next, within a sweep (seconds). The sweep is serial
     // by design; this spreads the requests out further still.
     "UpdateCheckStaggerSeconds": 5
+  },
+
+  // The sign-in provider whose access tokens the control routes admit: postponing, skipping and running
+  // a window carry the person's token, checked against the provider's published keys. Both values are
+  // host-level and come from /etc/kgsm/kgsm-cluster.env.
+  "Sessions": {
+    "Issuer": "",
+    "Audience": ""
   },
 
   "Logging": {

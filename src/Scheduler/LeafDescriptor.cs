@@ -1,3 +1,4 @@
+using TheKrystalShip.Kgsm.Scheduler;
 using TheKrystalShip.KGSM.ComponentConfig;
 
 // What the Control Panel shows about this daemon, declared beside the configuration it describes.
@@ -13,10 +14,11 @@ using TheKrystalShip.KGSM.ComponentConfig;
         + "exclusive — and sweeps the roster for newer game builds.")]
 
 // What a person may do with this daemon's schedule, through the node's API: the API checks them before
-// it relays to the socket, so they are declared here, where they are performed, and checked there.
-[assembly: Action("scheduler:windows.read", "See the maintenance schedule and what last ran",
+// it relays to the socket and the daemon checks the relayed token again, so they are declared here,
+// where they are performed.
+[assembly: Action(SchedulerActionIds.WindowsRead, "See the maintenance schedule and what last ran",
     DeclaredEffect.Read, DeclaredScope.Node)]
-[assembly: Action("scheduler:windows.write", "Postpone, skip or run a maintenance window now",
+[assembly: Action(SchedulerActionIds.WindowsWrite, "Postpone, skip or run a maintenance window now",
     DeclaredEffect.Execute, DeclaredScope.Node)]
 
 [assembly: ConfigGroup("general", "General", 1)]

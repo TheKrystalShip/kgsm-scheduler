@@ -31,10 +31,6 @@ internal sealed class SchedulerOptions
     /// <summary>Where a configuration change made through the Control Panel is written.</summary>
     public string ConfigOverridePath { get; init; } = "/var/lib/kgsm-api/leaf-overrides/scheduler.env";
     public string StateDirectory { get; init; } = "/var/lib/kgsm-scheduler";
-    /// <summary>The node's authority replica, read and never written.</summary>
-    public string AuthorityReplicaPath { get; init; } = "/var/lib/kgsm/auth/users.db";
-    /// <summary>The host file the node names itself in.</summary>
-    public string ProviderFilePath { get; init; } = "/var/lib/kgsm/cluster/auth-provider.json";
     /// <summary>How often to re-scan instance schedule config (seconds). At least <see cref="MinPollIntervalSeconds"/>.</summary>
     public int PollIntervalSeconds { get; init; } = 60;
     /// <summary>
@@ -92,8 +88,6 @@ internal sealed class SchedulerOptions
             SurfaceSocketPath = Or(s.SurfaceSocketPath, defaults.SurfaceSocketPath),
             ConfigOverridePath = Or(s.ConfigOverridePath, defaults.ConfigOverridePath),
             StateDirectory = Or(s.StateDirectory, defaults.StateDirectory),
-            AuthorityReplicaPath = Or(s.AuthorityReplicaPath, defaults.AuthorityReplicaPath),
-            ProviderFilePath = Or(s.ProviderFilePath, defaults.ProviderFilePath),
             PollIntervalSeconds = Math.Max(s.PollIntervalSeconds ?? defaults.PollIntervalSeconds, MinPollIntervalSeconds),
             GraceWindowMinutes = Math.Max(s.GraceWindowMinutes ?? defaults.GraceWindowMinutes, 0),
             MinimumWindowPeriodMinutes = Math.Max(

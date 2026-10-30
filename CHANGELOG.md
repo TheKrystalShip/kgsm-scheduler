@@ -4,6 +4,26 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — the author is checked when windows are saved; people are admitted by their token (5.0.0)
+
+**Breaking.** The scheduler no longer reads the node's authority replica or holds a service account.
+
+- **Windows run as the daemon, attributed to the author recorded when they were saved.** The check that
+  the author holds every action a window runs is made at save time, by whoever saves, and a role removed
+  from the author afterwards stops nothing already saved. Windows saved before this release keep their
+  recorded author and keep running. Windows with no recorded author still run nothing, each task
+  `blocked` with that reason. The "author or this daemon lacks the access" blocked states no longer
+  exist.
+- **The control routes admit a person by their access token.** `POST /windows/postpone`, `/skip` and
+  `/run-now` take the bearer the node relays, checked against the sign-in provider
+  (`TheKrystalShip.KGSM.Sessions` 1.0.0-dev.1), and require `scheduler:windows.write`. With no
+  `Sessions__Issuer` they answer `503`.
+- **The update sweep checks no author.** It only reads on its own host, so `updateCheckEnabled` is no
+  longer an automation setting and records no author.
+- **Configuration:** `Sessions__Issuer` and `Sessions__Audience` (host-level, from
+  `/etc/kgsm/kgsm-cluster.env`, which the unit now loads). `Scheduler__AuthorityReplicaPath` and
+  `Scheduler__ProviderFilePath` are gone, and `TheKrystalShip.Auth.Cluster` is no longer referenced.
+
 ### Fixed — tks-auth's journal is read (4.1.2)
 
 - Built on `TheKrystalShip.KGSM.Lib` 9.1.0, whose journal scan finds the organization's `tks-`

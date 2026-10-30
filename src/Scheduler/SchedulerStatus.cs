@@ -27,9 +27,8 @@ internal static class MaintenanceOutcomes
     public const string Aborted = "aborted";
 
     /// <summary>
-    /// Nobody who may do it asked for it: the window's author, or this daemon's own account, does not
-    /// hold the task's action at the server now — or nobody is recorded as the author at all. Saving
-    /// the windows again, as somebody who holds it, makes them its author.
+    /// Nobody is recorded as having saved the windows, so nobody's token was checked against what they
+    /// run. Saving the windows again, as somebody who holds every action they run, records the author.
     /// </summary>
     public const string Blocked = "blocked";
 }
@@ -68,9 +67,9 @@ internal sealed record MaintenanceRun(
 /// <param name="LastRun">The last run of this window, or null if it has not run since this daemon started.</param>
 /// <param name="Author">The account that wrote the instance's windows, or null when nobody is recorded.</param>
 /// <param name="Blocked">
-/// Why this window would not run if it came due now — its author or this daemon's own account does not
-/// hold what it does, or it has no author — or null when it would. Read on every poll, so a window is
-/// shown blocked before it is due rather than discovered as a blocked run afterwards.
+/// Why this window would not run if it came due now — nobody is recorded as having saved it — or null
+/// when it would. Read on every poll, so a window is shown blocked before it is due rather than
+/// discovered as a blocked run afterwards.
 /// </param>
 internal sealed record SchedulerWindowStatus(
     string Id,

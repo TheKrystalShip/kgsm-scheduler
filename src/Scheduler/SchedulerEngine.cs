@@ -152,7 +152,7 @@ internal sealed class SchedulerEngine(
             foreach (var read in reads)
             {
                 var plan = planned.Windows[read.Window.Id].Plan;
-                var disruptive = await runner.DisruptiveTasksAsync(name, read, instance, ct).ConfigureAwait(false);
+                var disruptive = runner.DisruptiveTasks(read, instance);
 
                 await announcer
                     .AnnounceUpcomingAsync(name, instance, read, plan, disruptive, now, ct)
@@ -186,7 +186,7 @@ internal sealed class SchedulerEngine(
                 described.Add(Describe(read, current.Windows.GetValueOrDefault(read.Window.Id)) with
                 {
                     Author = string.IsNullOrWhiteSpace(instance.MaintenanceWindowsAuthor) ? null : instance.MaintenanceWindowsAuthor,
-                    Blocked = await runner.BlockedAsync(name, read, instance, ct).ConfigureAwait(false),
+                    Blocked = runner.Blocked(read, instance),
                 });
             }
 

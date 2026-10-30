@@ -128,23 +128,23 @@
       "risk": "wiring"
     },
     {
-      "key": "authorityReplica",
-      "env": "Scheduler__AuthorityReplicaPath",
-      "label": "Authority replica",
-      "description": "The file the node on this machine keeps its copy of the cluster's accounts and roles in. A maintenance window runs only while both this service and the person who wrote it may do what it does, and this is where that is read.",
+      "key": "sessionsIssuer",
+      "env": "Sessions__Issuer",
+      "label": "Sign-in provider",
+      "description": "The sign-in provider the scheduler admits people from, as its tokens name it. It is the same for every component on this machine, set in the shared cluster environment file. Blank, nobody can postpone, skip or run a window.",
       "group": "wiring",
-      "type": "path",
-      "default": "/var/lib/kgsm/auth/users.db",
+      "type": "string",
+      "default": "",
       "risk": "wiring"
     },
     {
-      "key": "providerFile",
-      "env": "Scheduler__ProviderFilePath",
-      "label": "Node identity file",
-      "description": "Where the scheduler reads which node it is on, which names its own service account. The node on this machine writes it; leave it at the default unless the node writes somewhere else.",
+      "key": "sessionsAudience",
+      "env": "Sessions__Audience",
+      "label": "Token audience",
+      "description": "The audience the cluster's access tokens are minted for; a token for any other is refused. It is the same for every component on this machine, set in the shared cluster environment file.",
       "group": "wiring",
-      "type": "path",
-      "default": "/var/lib/kgsm/cluster/auth-provider.json",
+      "type": "string",
+      "default": "",
       "risk": "wiring"
     },
     {
@@ -197,12 +197,11 @@
       "key": "updateCheckEnabled",
       "env": "Scheduler__UpdateCheckEnabled",
       "label": "Check for game updates",
-      "description": "Whether to check each server for a newer game build. Turning this off means nothing on this host ever asks upstream, so no update notification is raised — servers keep running exactly as they are. Whoever turns it on is its author: each server is checked only while they can still read it.",
+      "description": "Whether to check each server for a newer game build. Turning this off means nothing on this host ever asks upstream, so no update notification is raised — servers keep running exactly as they are.",
       "group": "updates",
       "type": "bool",
       "default": "false",
-      "risk": "safe",
-      "automates": true
+      "risk": "safe"
     },
     {
       "key": "updateCheckIntervalMin",

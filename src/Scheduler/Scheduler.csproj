@@ -9,7 +9,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
-    <Version>4.1.2</Version>
+    <Version>5.0.0</Version>
 
     <!-- The leaf config descriptor is generated from SchedulerSettings. These name the two files the
          generator works between; the attribute source, the documentation file the <panel> tags travel
@@ -35,10 +35,9 @@
          already in the shared framework. -->
     <PackageReference Include="TheKrystalShip.KGSM.Lib" Version="9.1.0" />
 
-    <!-- The cluster's authority, read off the replica the node on this machine keeps: every window
-         and every sweep runs only where both this daemon's service account and the person who
-         switched it on may do what it does. -->
-    <PackageReference Include="TheKrystalShip.Auth.Cluster" Version="2.0.0" />
+    <!-- The people the control routes admit: the access token the node relays is checked against the
+         sign-in provider's keys, and the actions it lists decide what the person may tell this daemon. -->
+    <PackageReference Include="TheKrystalShip.KGSM.Sessions" Version="1.0.0-dev.1" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TheKrystalShip.Auth.Cluster;
 using TheKrystalShip.KGSM.Core.Interfaces;
 using TheKrystalShip.KGSM.Core.Models;
 using TheKrystalShip.KGSM.Core.Models.Enums;
@@ -40,7 +39,6 @@ internal sealed class MaintenanceRunner(
     ScheduleRegistry registry,
     MaintenanceTaskCatalog catalog,
     WindowAnnouncer announcer,
-    AutomationAccess access,
     IOptions<SchedulerOptions> options,
     ILogger<MaintenanceRunner> logger)
 {
@@ -58,14 +56,13 @@ internal sealed class MaintenanceRunner(
     /// <remarks>
     /// This decides whether the window is announced and what <c>{reason}</c> says. Announcing a
     /// restart that will not happen is the one thing an announcement must never do, so a task the
-    /// host policy refuses, a task the instance's runtime puts out of reach and a task nobody who may
-    /// do it asked for are all left out — each is known before the countdown opens, and a countdown
+    /// host policy refuses, a task the instance's runtime puts out of reach and a window nobody is
+    /// recorded as having saved are all left out — each is known before the countdown opens, and a countdown
     /// that can only end in a retraction should never have started.
     /// </remarks>
-    public async Task<IReadOnlyList<MaintenanceTask>> DisruptiveTasksAsync(
-        string name, ReadWindow read, Instance instance, CancellationToken ct)
+    public IReadOnlyList<MaintenanceTask> DisruptiveTasks(ReadWindow read, Instance instance)
     {
-        if (!read.Valid || !options.Value.AllowDisruptiveTasks) return [];
+        if (!read.Valid || !options.Value.AllowDisruptiveTasks || Unsaved(instance) is not null) return [];
 
         // Every disruptive task is issued through the watchdog, which supervises native instances
         // alone. The task's own gate declines it either way; this keeps the server from being told
@@ -75,11 +72,8 @@ internal sealed class MaintenanceRunner(
         var disruptive = new List<MaintenanceTask>();
         foreach (MaintenanceTask task in read.Window.Tasks)
         {
-            if (catalog.Find(task) is { IsDisruptive: true } implementation
-                && (await AuthorizeAsync(implementation, name, instance, ct).ConfigureAwait(false)).Allowed)
-            {
+            if (catalog.Find(task) is { IsDisruptive: true })
                 disruptive.Add(task);
-            }
         }
 
         return disruptive;
@@ -89,29 +83,21 @@ internal sealed class MaintenanceRunner(
     /// Why <paramref name="read"/> would not run on <paramref name="instance"/> if it came due now, or
     /// null when every task it carries may run.
     /// </summary>
-    public async Task<string?> BlockedAsync(string name, ReadWindow read, Instance instance, CancellationToken ct)
-    {
-        if (!read.Valid) return null;
-
-        foreach (MaintenanceTask task in read.Window.Tasks)
-        {
-            if (catalog.Find(task) is not { } implementation) continue;
-
-            AutomationVerdict verdict = await AuthorizeAsync(implementation, name, instance, ct).ConfigureAwait(false);
-            if (!verdict.Allowed)
-                return $"{implementation.Name}: {verdict.Reason}";
-        }
-
-        return null;
-    }
+    public string? Blocked(ReadWindow read, Instance instance) => read.Valid ? Unsaved(instance) : null;
 
     /// <summary>
-    /// Whether this daemon and the window's author may both do what <paramref name="task"/> does at the
-    /// server, now.
+    /// Why the windows of <paramref name="instance"/> run nothing because no save is on record, or null
+    /// when one is.
     /// </summary>
-    private Task<AutomationVerdict> AuthorizeAsync(
-        IMaintenanceTask task, string name, Instance instance, CancellationToken ct) =>
-        access.DecideAsync(task.Actions, name, instance.InstallNonce, instance.MaintenanceWindowsAuthor, ct);
+    /// <remarks>
+    /// The author is checked when the windows are saved: the person's token had to list every action a
+    /// window runs, and the engine records who that was. Windows written some other way, such as by
+    /// editing the instance's config by hand, record nobody and run nothing until they are saved again.
+    /// </remarks>
+    private static string? Unsaved(Instance instance) =>
+        string.IsNullOrWhiteSpace(instance.MaintenanceWindowsAuthor)
+            ? "nobody is recorded as having saved these windows; saving them again records who did"
+            : null;
 
     /// <summary>
     /// Opens a window run, off the tick so a long backup cannot hold up every other instance's
@@ -182,8 +168,9 @@ internal sealed class MaintenanceRunner(
         // what one of them did to the instance is available to the next.
         var context = new MaintenanceContext(name, instance, read.Window, instances, watchdog, new WindowProgress());
 
-        logger.LogInformation("{Instance}: running {Window} ({Tasks})",
-            name, windowId, string.Join(", ", read.Window.Tasks.Select(t => t.ToToken())));
+        logger.LogInformation("{Instance}: running {Window} ({Tasks}) for {Author}",
+            name, windowId, string.Join(", ", read.Window.Tasks.Select(t => t.ToToken())),
+            instance.MaintenanceWindowsAuthor);
 
         // Canonical order — backup, then update, then restart — is the order kgsm-lib returns the
         // tasks in, whatever order they were written. A backup taken after an update archives the
@@ -212,15 +199,13 @@ internal sealed class MaintenanceRunner(
                 continue;
             }
 
-            // Judged at the moment it would run, not when the window was written: an author who has
-            // since lost the access stops their windows here. The rest of the window carries on — a
-            // backup nobody may take says nothing about the restart after it.
-            AutomationVerdict verdict = await AuthorizeAsync(implementation, name, instance, ct).ConfigureAwait(false);
-            if (!verdict.Allowed)
+            // A window nobody is recorded as having saved runs nothing. One that was saved runs as this
+            // daemon, attributed to the person who saved it; losing a role afterwards stops nothing.
+            if (Unsaved(instance) is { } unsaved)
             {
                 logger.LogWarning("{Instance}: {Window}/{Task} blocked — {Reason}",
-                    name, windowId, implementation.Name, verdict.Reason);
-                records.Add(new MaintenanceTaskRun(implementation.Name, MaintenanceOutcomes.Blocked, verdict.Reason));
+                    name, windowId, implementation.Name, unsaved);
+                records.Add(new MaintenanceTaskRun(implementation.Name, MaintenanceOutcomes.Blocked, unsaved));
                 continue;
             }
 
@@ -301,7 +286,7 @@ internal sealed class MaintenanceRunner(
     /// <remarks>
     /// A failure anywhere makes the window a failure, because the tasks after it never ran. With
     /// nothing failed, one task that did its work makes the window <c>ok</c>; a window held back
-    /// because nobody who may do it asked is <c>blocked</c>, which somebody has to act on; and a
+    /// because nobody is recorded as having saved it is <c>blocked</c>, which somebody has to act on; and a
     /// window where nothing applied to the instance is <c>skipped</c>, which is a different sentence
     /// from a window that tried and could not.
     /// </remarks>
