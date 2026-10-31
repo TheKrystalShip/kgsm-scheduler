@@ -39,37 +39,5 @@
       "effect": "execute",
       "scope": "node"
     }
-  ],
-  "requires": [
-    {
-      "action": "kgsm:server.announce",
-      "scope": "instance",
-      "why": "Warn the players on a server before a maintenance window interrupts them"
-    },
-    {
-      "action": "kgsm:server.backups.create",
-      "scope": "instance",
-      "why": "Take the backups a maintenance window asks for"
-    },
-    {
-      "action": "kgsm:server.backups.manage",
-      "scope": "instance",
-      "why": "Prune old backups to the retention a server keeps, after a scheduled backup lands"
-    },
-    {
-      "action": "kgsm:server.read",
-      "scope": "instance",
-      "why": "Read each server's maintenance windows, run state and update evidence on every poll"
-    },
-    {
-      "action": "kgsm:server.restart",
-      "scope": "instance",
-      "why": "Restart a server in a maintenance window"
-    },
-    {
-      "action": "kgsm:server.update",
-      "scope": "instance",
-      "why": "Apply a newer game build in a maintenance window"
-    }
   ]
 }

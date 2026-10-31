@@ -170,7 +170,7 @@ internal sealed class MaintenanceRunner(
 
         logger.LogInformation("{Instance}: running {Window} ({Tasks}) for {Author}",
             name, windowId, string.Join(", ", read.Window.Tasks.Select(t => t.ToToken())),
-            instance.MaintenanceWindowsAuthor);
+            instance.MaintenanceWindowsAuthorName ?? instance.MaintenanceWindowsAuthor);
 
         // Canonical order — backup, then update, then restart — is the order kgsm-lib returns the
         // tasks in, whatever order they were written. A backup taken after an update archives the

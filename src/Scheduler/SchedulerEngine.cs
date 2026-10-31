@@ -185,7 +185,9 @@ internal sealed class SchedulerEngine(
             {
                 described.Add(Describe(read, current.Windows.GetValueOrDefault(read.Window.Id)) with
                 {
-                    Author = string.IsNullOrWhiteSpace(instance.MaintenanceWindowsAuthor) ? null : instance.MaintenanceWindowsAuthor,
+                    Author = string.IsNullOrWhiteSpace(instance.MaintenanceWindowsAuthor)
+                        ? null
+                        : instance.MaintenanceWindowsAuthorName ?? instance.MaintenanceWindowsAuthor,
                     Blocked = runner.Blocked(read, instance),
                 });
             }

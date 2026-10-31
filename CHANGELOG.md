@@ -4,6 +4,16 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — a window's author is shown by name (5.1.0)
+
+Status and the run log name the window's author by the display name the engine recorded beside the
+subject (`MaintenanceWindowsAuthorName`), and by the subject when no name was recorded. The daemon declares
+no service requirements.
+
+Builds with `TheKrystalShip.KGSM.ComponentConfig` 4.0.0 and serves its surface with
+`ComponentSurface` and `ComponentSurface.Http` 2.0.0. The action manifest it writes lists the actions the
+daemon performs and no requirements section. The manifest is served at `/.well-known/tks-actions.json`.
+
 ### Changed — the author is checked when windows are saved; people are admitted by their token (5.0.0)
 
 **Breaking.** The scheduler no longer reads the node's authority replica or holds a service account.

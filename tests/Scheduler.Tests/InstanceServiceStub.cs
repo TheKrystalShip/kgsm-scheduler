@@ -125,7 +125,17 @@ internal sealed class InstanceServiceStub : IInstanceService
     public KgsmResult GetInstanceConfigValue(string instanceName, string key) => Unused<KgsmResult>();
     public List<InstanceConfigEntry>? GetInstanceConfig(string instanceName, bool settableOnly = false) => Unused<List<InstanceConfigEntry>?>();
     public KgsmResult SetInstanceConfigValue(string instanceName, string key, string value, string? actor = null, string? origin = null) => Unused<KgsmResult>();
-    public KgsmResult SetMaintenanceWindows(string instanceName, string packedWindows, string? author, string? actor = null, string? origin = null) => Unused<KgsmResult>();
+    public KgsmResult SetMaintenanceWindows(string instanceName, string packedWindows, string? author, string? actor = null, string? origin = null, string? authorName = null) => Unused<KgsmResult>();
+    public TransferOutcome<TransferManifest> ExportManifest(string instanceName, string? lockToken = null, string? actor = null, string? origin = null) => Unused<TransferOutcome<TransferManifest>>();
+    public Task<StreamResult> ExportPartAsync(string instanceName, string partId, string lockToken, Stream destination, string? actor = null, string? origin = null, CancellationToken cancellationToken = default) => Unused<Task<StreamResult>>();
+    public KgsmResult CommitExport(string instanceName, string lockToken, string? actor = null, string? origin = null) => Unused<KgsmResult>();
+    public KgsmResult Unlock(string instanceName, string? lockToken = null, bool force = false, string? actor = null, string? origin = null) => Unused<KgsmResult>();
+    public ImportVerdict ImportCheck(TransferManifest manifest, string? library = null, string? blueprintSuffix = null, string? actor = null, string? origin = null) => Unused<ImportVerdict>();
+    public ImportBeginResult ImportBegin(TransferManifest manifest, string? library = null, string? blueprintSuffix = null, string? actor = null, string? origin = null) => Unused<ImportBeginResult>();
+    public Task<StreamResult> ImportPartAsync(string importId, string partId, Stream source, string? actor = null, string? origin = null, CancellationToken cancellationToken = default) => Unused<Task<StreamResult>>();
+    public TransferOutcome<ImportedInstance> ImportFinish(string importId, string? actor = null, string? origin = null) => Unused<TransferOutcome<ImportedInstance>>();
+    public KgsmResult ImportAbort(string importId, string? actor = null, string? origin = null) => Unused<KgsmResult>();
+    public TransferOutcome<List<StagedImport>> ImportList() => Unused<TransferOutcome<List<StagedImport>>>();
     public KgsmResult SetDisplayName(string instanceId, string displayName, string? actor = null, string? origin = null) => Unused<KgsmResult>();
     public InstanceNoteResult SetInstanceNote(string instanceName, string body, string? actor = null, string? origin = null) => Unused<InstanceNoteResult>();
     public Task<LogSubscription> SubscribeToLogsAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<LogSubscription>>();

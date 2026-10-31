@@ -64,8 +64,8 @@ package() {
     install -Dm644 "${repo}/deploy/kgsm-scheduler.leaf.json" \
         "${pkgdir}/var/lib/kgsm/leaves/scheduler.json"
 
-    # The actions this daemon declares and the ones its own service account requires, beside the
-    # descriptor in its actions/ directory under the same name, where the node reports them.
+    # The actions this daemon performs, beside the descriptor in its actions/ directory under the
+    # same name, where the node serves them.
     install -Dm644 "${repo}/deploy/kgsm-scheduler.leaf.actions.json" \
         "${pkgdir}/var/lib/kgsm/leaves/actions/scheduler.json"
 
