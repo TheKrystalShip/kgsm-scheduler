@@ -14,7 +14,7 @@ using TheKrystalShip.Kgsm.Scheduler;
 using TheKrystalShip.Kgsm.Scheduler.Json;
 using TheKrystalShip.KGSM.Core.Interfaces;
 using TheKrystalShip.KGSM.Lifecycle;
-using TheKrystalShip.KGSM.Sessions;
+using TheKrystalShip.Auth.Sessions;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -72,7 +72,7 @@ internal sealed class Program
             .Get<SessionsSettings>() ?? new SessionsSettings();
         bool sessionsConfigured = !string.IsNullOrWhiteSpace(sessionSettings.Issuer);
         if (sessionsConfigured)
-            builder.Services.AddKgsmSessions();
+            builder.Services.AddSessions();
 
         builder.Services.AddSingleton(sp => new PendingAnnouncementStore(
             options.StateDirectory,

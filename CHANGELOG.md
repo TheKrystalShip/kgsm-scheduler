@@ -4,6 +4,12 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Changed — tokens checked by `TheKrystalShip.Auth.Sessions` (5.1.1)
+
+A person's access token is checked by `TheKrystalShip.Auth.Sessions` 1.0.0-dev.1, the package tks-auth
+publishes for every service that admits its tokens. The checks, the refusals and what a route requires are
+the same.
+
 ### Changed — a window's author is shown by name (5.1.0)
 
 Status and the run log name the window's author by the display name the engine recorded beside the

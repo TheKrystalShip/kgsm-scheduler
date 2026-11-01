@@ -90,7 +90,7 @@ no schedule; the plan survives ticks because it is kept while its signature matc
 does not change the signature. A moved target is a different fire from the one anybody was warned about,
 so the engine retracts the warnings given and announces afresh. The verbs are `scheduler:windows.write`:
 the node relays the person's access token as a bearer and each route admits a token listing it
-(`KGSM.Sessions`, `Sessions__Issuer`/`Sessions__Audience`); with no issuer they answer `503`.
+(`TheKrystalShip.Auth.Sessions`, `Sessions__Issuer`/`Sessions__Audience`); with no issuer they answer `503`.
 
 ## Its own surface
 
