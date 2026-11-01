@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using TheKrystalShip.KGSM.Core.Models;
 using TheKrystalShip.KGSM.Core.Models.Enums;
 using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.Testing;
 
 namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 
@@ -73,22 +74,16 @@ public sealed class MaintenanceRunnerTests : IDisposable
         _registry.Set(Name, new ScheduleState { Windows = windows });
     }
 
-    private Task<MaintenanceRun?> RunAsync(MaintenanceRunner runner, string expression) =>
+    private Task<MaintenanceRun> RunAsync(MaintenanceRunner runner, string expression) =>
         RunAsync(runner, expression, NewInstance());
 
-    private async Task<MaintenanceRun?> RunAsync(MaintenanceRunner runner, string expression, Instance instance)
+    private Task<MaintenanceRun> RunAsync(MaintenanceRunner runner, string expression, Instance instance)
     {
         ReadWindow read = Read(expression);
         runner.Fire(Name, instance, read);
-
-        for (int i = 0; i < 200; i++)
-        {
-            MaintenanceRun? run = _registry.Get(Name)?.Windows.GetValueOrDefault(read.Window.Id)?.LastRun;
-            if (run is not null) return run;
-            await Task.Delay(10);
-        }
-
-        return null;
+        return Eventually.Yields(
+            () => _registry.Get(Name)?.Windows.GetValueOrDefault(read.Window.Id)?.LastRun,
+            $"the {read.Window.Id} window records its run");
     }
 
     // ---- what a window does ------------------------------------------------
@@ -356,14 +351,10 @@ public sealed class MaintenanceRunnerTests : IDisposable
         ReadWindow read = Read("daily@04:00/backup,restart");
         NewRunner().Fire(Name, NewInstance(InstanceRuntime.Container), read);
 
-        MaintenanceRun? run = null;
-        for (int i = 0; i < 200 && run is null; i++)
-        {
-            run = _registry.Get(Name)?.Windows["daily@04:00"].LastRun;
-            if (run is null) await Task.Delay(10);
-        }
+        MaintenanceRun run = await Eventually.Yields(
+            () => _registry.Get(Name)?.Windows["daily@04:00"].LastRun, "the daily@04:00 window records its run");
 
-        Assert.Equal(MaintenanceOutcomes.Ok, run!.Outcome);
+        Assert.Equal(MaintenanceOutcomes.Ok, run.Outcome);
         Assert.Equal(
             [("backup", MaintenanceOutcomes.Ok), ("restart", MaintenanceOutcomes.Skipped)],
             run.Tasks.Select(t => (t.Name, t.Outcome)));
@@ -389,7 +380,7 @@ public sealed class MaintenanceRunnerTests : IDisposable
         runner.Fire(Name, NewInstance(), Read("daily@05:00/backup"));
 
         // Wait for the backup to be in flight, then bring the restart window round on top of it.
-        for (int i = 0; i < 200 && _instances.Calls.Count == 0; i++) await Task.Delay(10);
+        await Eventually.Holds(() => _instances.Calls.Count > 0, "the backup is in flight");
         runner.Fire(Name, NewInstance(), Read("daily@04:00/restart"));
 
         MaintenanceRun? restart = _registry.Get(Name)!.Windows["daily@04:00"].LastRun;
@@ -404,8 +395,8 @@ public sealed class MaintenanceRunnerTests : IDisposable
         Assert.Empty(_watchdog.Restarts);
 
         hold.Release();
-        for (int i = 0; i < 200 && _registry.Get(Name)!.Windows["daily@05:00"].LastRun is null; i++)
-            await Task.Delay(10);
+        await Eventually.Holds(
+            () => _registry.Get(Name)!.Windows["daily@05:00"].LastRun is not null, "the daily@05:00 window records its run");
         Assert.Equal(MaintenanceOutcomes.Ok, _registry.Get(Name)!.Windows["daily@05:00"].LastRun!.Outcome);
     }
 
