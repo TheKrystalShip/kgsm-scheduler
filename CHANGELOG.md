@@ -4,6 +4,11 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+### Fixed — journal appends keep every line under concurrent writes (5.1.2)
+
+The daemon pins `TheKrystalShip.KGSM.Journal` 2.5.0-dev.3, whose writer appends with `O_APPEND`. Concurrent appends
+no longer overwrite each other's lines.
+
 ### Changed — tokens checked by `TheKrystalShip.Auth.Sessions` (5.1.1)
 
 A person's access token is checked by `TheKrystalShip.Auth.Sessions` 1.0.0-dev.1, the package tks-auth
