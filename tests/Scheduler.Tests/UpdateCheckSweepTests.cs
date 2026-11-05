@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+
 namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 
 /// <summary>
@@ -58,35 +61,70 @@ public class UpdateCheckSweepTests
             Now.AddHours(1), Now, intervalMinutes: 60));
     }
 
-    // ---- what a failure reports --------------------------------------------
+    // ---- what a sweep does -------------------------------------------------
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   \n  ")]
-    public void NoFailureDetailSummarizesToNothing(string? stderr)
+    private static (UpdateCheckSweep Sweep, EngineStub Engine, ScheduleRegistry Registry) NewSweep()
     {
-        Assert.Null(EngineDetail.Summarize(stderr));
-    }
+        var engine = new EngineStub();
+        engine.Instances["mc-01"] = TestInstances.Config("mc-01");
+        engine.Instances["mc-02"] = TestInstances.Config("mc-02");
+        var registry = new ScheduleRegistry();
+        var options = Options.Create(new SchedulerOptions
+        {
+            UpdateCheckEnabled = true,
+            UpdateCheckIntervalMinutes = 60,
+            UpdateCheckStaggerSeconds = 0,
+        });
 
-    // kgsm writes several lines of context on a failed check and the status snapshot is one NDJSON
-    // line per connection, so the last line — the one naming what actually went wrong — travels.
-    [Fact]
-    public void TheLastLineOfAMultiLineFailureIsWhatTravels()
-    {
-        const string stderr = """
-            [ERROR] instances.sh:2216 Running update check...
-            [ERROR] instances.sh:2219 Could not determine the latest version for 'starbound'
-            """;
-
-        Assert.Equal(
-            "[ERROR] instances.sh:2219 Could not determine the latest version for 'starbound'",
-            EngineDetail.Summarize(stderr));
+        return (new UpdateCheckSweep(engine, options, registry, NullLogger<UpdateCheckSweep>.Instance), engine, registry);
     }
 
     [Fact]
-    public void ASingleLineFailureIsTrimmed()
+    public async Task ASweepAsksEveryServerAndRecordsEachAnswer()
     {
-        Assert.Equal("registry did not answer", EngineDetail.Summarize("  registry did not answer \n"));
+        var (sweep, engine, registry) = NewSweep();
+
+        await sweep.SweepAsync(CancellationToken.None);
+
+        Assert.Equal(["check:mc-01", "check:mc-02"], engine.Calls.Where(c => c.StartsWith("check:", StringComparison.Ordinal)));
+        Assert.True(registry.Get("mc-01")!.LastUpdateCheckOk);
+        Assert.Null(registry.Get("mc-01")!.LastUpdateCheckMessage);
+    }
+
+    [Fact]
+    public async Task AFailedCheckRecordsTheEnginesOwnMessageAndTheSweepGoesOn()
+    {
+        var (sweep, engine, registry) = NewSweep();
+        engine.CheckExitCode = 1;
+
+        await sweep.SweepAsync(CancellationToken.None);
+
+        ScheduleState state = registry.Get("mc-02")!;
+        Assert.False(state.LastUpdateCheckOk);
+        Assert.Equal("the upstream refused", state.LastUpdateCheckMessage);
+        Assert.Contains("check:mc-02", engine.Calls);
+    }
+
+    [Fact]
+    public async Task AServerCheckedRecentlyAccordingToTheEngineIsLeftAlone()
+    {
+        var (sweep, engine, _) = NewSweep();
+        engine.Recorded("mc-01", current: "1.0", latest: "1.0", updatesAvailable: false);
+
+        await sweep.SweepAsync(CancellationToken.None);
+
+        Assert.DoesNotContain("check:mc-01", engine.Calls);
+        Assert.Contains("check:mc-02", engine.Calls);
+    }
+
+    [Fact]
+    public async Task AnUnreadableRegistryChecksNothing()
+    {
+        var (sweep, engine, _) = NewSweep();
+        engine.RegistryReadable = false;
+
+        await sweep.SweepAsync(CancellationToken.None);
+
+        Assert.Empty(engine.Calls);
     }
 }

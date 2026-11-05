@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
-using TheKrystalShip.KGSM.Core.Interfaces;
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
+using TheKrystalShip.KGSM.Watchdog.Client;
+using TheKrystalShip.KGSM.Watchdog.Model;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -44,7 +44,7 @@ internal sealed class RestartTask(ILogger<RestartTask> logger) : IMaintenanceTas
 
         logger.LogInformation("{Instance}: firing scheduled restart", ctx.Name);
 
-        WatchdogActionResult result = await ctx.Watchdog
+        ActionResult result = await ctx.Watchdog
             .RestartAsync(ctx.Name, Provenance.Leaf, ct)
             .ConfigureAwait(false);
 

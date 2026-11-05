@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
-using TheKrystalShip.KGSM.Core.Interfaces;
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
+using TheKrystalShip.KGSM.Watchdog.Client;
+using TheKrystalShip.KGSM.Engine.Contracts.Instances;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -22,7 +22,7 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 /// </para>
 /// </remarks>
 internal sealed class WindowAnnouncer(
-    IInstanceService instances,
+    IEngine engine,
     IWatchdogClient watchdog,
     PendingAnnouncementStore pending,
     ILogger<WindowAnnouncer> logger)
@@ -48,7 +48,7 @@ internal sealed class WindowAnnouncer(
     /// <param name="ct">Cancels the request.</param>
     public async Task AnnounceUpcomingAsync(
         string name,
-        Instance instance,
+        InstanceConfig instance,
         ReadWindow read,
         WindowPlan plan,
         IReadOnlyCollection<MaintenanceTask> disruptive,
@@ -134,15 +134,14 @@ internal sealed class WindowAnnouncer(
 
         string message = AnnouncementPlan.Resolve(
             instance.AnnounceMaintenanceMessage!, instance, mark, reason);
-        KgsmResult result = instances.Announce(
-            name, message, actor: Provenance.Actor, origin: Provenance.Origin);
+        var result = await engine.AnnounceAsync(name, message, ct).ConfigureAwait(false);
 
-        if (result.ExitCode != 0)
+        if (!result.IsSuccess)
         {
             // The maintenance is the job; a warning that could not be delivered does not stop it.
             // Never silent, though — an announcement path that fails quietly is indistinguishable
             // from one nobody wired up.
-            logger.LogWarning("{Instance}: could not announce {Window}: {Error}", name, windowId, result.Stderr);
+            logger.LogWarning("{Instance}: could not announce {Window}: {Error}", name, windowId, result.Message);
         }
         else
         {
@@ -163,7 +162,7 @@ internal sealed class WindowAnnouncer(
     /// abandoned — a gate declining it, a window deleted mid-countdown, a fire too overdue to run,
     /// an occurrence skipped. No-op for a window that was never announced.
     /// </remarks>
-    public async Task RetractAsync(string name, Instance instance, string windowId, CancellationToken ct)
+    public async Task RetractAsync(string name, InstanceConfig instance, string windowId, CancellationToken ct)
     {
         if (pending.Get(name, windowId) is null)
         {
@@ -173,7 +172,7 @@ internal sealed class WindowAnnouncer(
         pending.Clear(name, windowId);
 
         string? template = instance.AnnounceMaintenanceCancelledMessage;
-        if (string.IsNullOrWhiteSpace(template) || !BroadcastCommand.IsSupported(instance.BroadcastCommand))
+        if (string.IsNullOrWhiteSpace(template) || !AnnouncementPlan.SupportsBroadcast(instance.BroadcastCommand))
         {
             return;
         }
@@ -184,13 +183,12 @@ internal sealed class WindowAnnouncer(
         }
 
         string message = AnnouncementPlan.Resolve(template, instance, minutes: null);
-        KgsmResult result = instances.Announce(
-            name, message, actor: Provenance.Actor, origin: Provenance.Origin);
+        var result = await engine.AnnounceAsync(name, message, ct).ConfigureAwait(false);
 
-        if (result.ExitCode != 0)
+        if (!result.IsSuccess)
         {
             logger.LogWarning("{Instance}: could not announce the cancellation of {Window}: {Error}",
-                name, windowId, result.Stderr);
+                name, windowId, result.Message);
         }
         else
         {
@@ -217,12 +215,12 @@ internal sealed class WindowAnnouncer(
     {
         try
         {
-            var presence = await watchdog.GetPlayerPresenceAsync(ct).ConfigureAwait(false);
+            var presence = await watchdog.PlayersAsync(ct).ConfigureAwait(false);
 
             return presence is not null
                 && presence.TryGetValue(name, out var instancePresence)
                 && instancePresence.IsDetected
-                && instancePresence.Players.Count == 0;
+                && instancePresence.Players.Length == 0;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

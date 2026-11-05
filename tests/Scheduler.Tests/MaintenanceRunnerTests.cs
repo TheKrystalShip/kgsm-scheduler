@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Models.Enums;
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
 using TheKrystalShip.Testing;
+using TheKrystalShip.KGSM.Engine.Contracts.Instances;
+using TheKrystalShip.KGSM.Engine.Contracts.Blueprints;
 
 namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 
@@ -15,7 +15,7 @@ public sealed class MaintenanceRunnerTests : IDisposable
     private const string Name = "factorio-01";
 
     private readonly string _dir = Directory.CreateTempSubdirectory("kgsm-sched-runner-").FullName;
-    private readonly InstanceServiceStub _instances = new();
+    private readonly EngineStub _instances = new();
     private readonly WatchdogClientStub _watchdog = WatchdogClientStub.Answering(WatchdogClientStub.Running(Name));
     private readonly ScheduleRegistry _registry = new();
 
@@ -33,9 +33,9 @@ public sealed class MaintenanceRunnerTests : IDisposable
         new RestartTask(NullLogger<RestartTask>.Instance),
     ]);
 
-    private Instance NewInstance(InstanceRuntime runtime = InstanceRuntime.Native) => NewInstance(Author, runtime);
+    private InstanceConfig NewInstance(BlueprintRuntime runtime = BlueprintRuntime.Native) => NewInstance(Author, runtime);
 
-    private static Instance NewInstance(string? author, InstanceRuntime runtime = InstanceRuntime.Native) => new()
+    private static InstanceConfig NewInstance(string? author, BlueprintRuntime runtime = BlueprintRuntime.Native) => TestInstances.Config() with
     {
         Name = Name,
         DisplayName = "Factorio",
@@ -77,7 +77,7 @@ public sealed class MaintenanceRunnerTests : IDisposable
     private Task<MaintenanceRun> RunAsync(MaintenanceRunner runner, string expression) =>
         RunAsync(runner, expression, NewInstance());
 
-    private Task<MaintenanceRun> RunAsync(MaintenanceRunner runner, string expression, Instance instance)
+    private Task<MaintenanceRun> RunAsync(MaintenanceRunner runner, string expression, InstanceConfig instance)
     {
         ReadWindow read = Read(expression);
         runner.Fire(Name, instance, read);
@@ -97,7 +97,7 @@ public sealed class MaintenanceRunnerTests : IDisposable
 
         Assert.Equal(MaintenanceOutcomes.Ok, run!.Outcome);
         Assert.Equal([("backup", MaintenanceOutcomes.Ok)], run.Tasks.Select(t => (t.Name, t.Outcome)));
-        Assert.Equal([$"backup:{Name}:scheduled:system:scheduler:system", $"prune:{Name}:5"], _instances.Calls);
+        Assert.Equal([$"backup:{Name}:scheduled", $"prune:{Name}:5"], _instances.Calls);
     }
 
     [Fact]
@@ -145,11 +145,11 @@ public sealed class MaintenanceRunnerTests : IDisposable
             run.Tasks.Select(t => (t.Name, t.Outcome)));
 
         Assert.Equal([
-            $"backup:{Name}:scheduled:system:scheduler:system",
+            $"backup:{Name}:scheduled",
             $"prune:{Name}:5",
-            "statuses:fast=True",
+            "versions",
             $"park:{Name}:scheduler",
-            $"update:{Name}:system:scheduler:system",
+            $"update:{Name}",
             $"release:{Name}:scheduler",
         ], _instances.Calls);
 
@@ -284,7 +284,7 @@ public sealed class MaintenanceRunnerTests : IDisposable
         ReadWindow window = Read("daily@04:00/backup,restart");
 
         Assert.Empty(NewRunner(allowDisruptive: false).DisruptiveTasks(window, NewInstance()));
-        Assert.Empty(NewRunner().DisruptiveTasks(window, NewInstance(InstanceRuntime.Container)));
+        Assert.Empty(NewRunner().DisruptiveTasks(window, NewInstance(BlueprintRuntime.Container)));
         Assert.Empty(NewRunner().DisruptiveTasks(Read("daily@05:00/backup"), NewInstance()));
         Assert.Equal([MaintenanceTask.Restart], NewRunner().DisruptiveTasks(window, NewInstance()));
     }
@@ -349,7 +349,7 @@ public sealed class MaintenanceRunnerTests : IDisposable
     {
         Plan("daily@04:00/backup,restart");
         ReadWindow read = Read("daily@04:00/backup,restart");
-        NewRunner().Fire(Name, NewInstance(InstanceRuntime.Container), read);
+        NewRunner().Fire(Name, NewInstance(BlueprintRuntime.Container), read);
 
         MaintenanceRun run = await Eventually.Yields(
             () => _registry.Get(Name)?.Windows["daily@04:00"].LastRun, "the daily@04:00 window records its run");

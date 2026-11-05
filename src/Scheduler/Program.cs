@@ -9,10 +9,13 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheKrystalShip.KGSM.ComponentSurface;
 using TheKrystalShip.KGSM.ComponentSurface.Http;
+using TheKrystalShip.KGSM.Core.Interfaces;
+using TheKrystalShip.KGSM.Engine.Contracts.Invocation;
+using TheKrystalShip.KGSM.Engine.Reading;
 using TheKrystalShip.KGSM.Extensions;
+using TheKrystalShip.KGSM.Watchdog.Client;
 using TheKrystalShip.Kgsm.Scheduler;
 using TheKrystalShip.Kgsm.Scheduler.Json;
-using TheKrystalShip.KGSM.Core.Interfaces;
 using TheKrystalShip.KGSM.Lifecycle;
 using TheKrystalShip.Auth.Sessions;
 
@@ -78,10 +81,11 @@ internal sealed class Program
             options.StateDirectory,
             sp.GetRequiredService<ILoggerFactory>().CreateLogger<PendingAnnouncementStore>()));
 
-        // The scheduler consumes no events — it reads config from the filesystem
-        // (IInstanceService shells out to kgsm) and dispatches through the watchdog client.
-        // The registered journal reader is simply never initialized.
-        builder.Services.AddKgsmServices(options.KgsmPath);
+        // The scheduler consumes no events. It reads instance config through the engine core, acts on the
+        // engine by running the kgsm binary, and dispatches through the watchdog client.
+        builder.Services.AddSingleton(_ => new EngineReader(new EngineReaderOptions { BinaryPath = options.KgsmPath }));
+        builder.Services.AddSingleton(_ => new EngineCli(new EngineCliOptions { BinaryPath = options.KgsmPath }));
+        builder.Services.AddSingleton<IEngine, EngineGateway>();
         builder.Services.AddKgsmWatchdogClient(options.WatchdogSocketPath);
 
         // This daemon's own event journal. It records nothing about game servers — the watchdog owns
@@ -107,7 +111,7 @@ internal sealed class Program
 
         builder.Services.AddHostedService<SchedulerEngine>();
         builder.Services.AddHostedService(sp => new UpdateCheckSweep(
-            sp.GetRequiredService<IInstanceService>(),
+            sp.GetRequiredService<IEngine>(),
             sp.GetRequiredService<IOptions<SchedulerOptions>>(),
             sp.GetRequiredService<ScheduleRegistry>(),
             sp.GetRequiredService<ILogger<UpdateCheckSweep>>()));

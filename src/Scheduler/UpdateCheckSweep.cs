@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TheKrystalShip.KGSM.Core.Interfaces;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -29,7 +28,7 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 /// consulted when it runs.
 /// </remarks>
 internal sealed class UpdateCheckSweep(
-    IInstanceService instances,
+    IEngine engine,
     IOptions<SchedulerOptions> options,
     ScheduleRegistry registry,
     ILogger<UpdateCheckSweep> logger) : BackgroundService
@@ -66,9 +65,9 @@ internal sealed class UpdateCheckSweep(
     /// there are servers, all in the same second, against hosts that have every reason to throttle
     /// that. A sweep is not urgent — it is allowed to take minutes.
     /// </summary>
-    private async Task SweepAsync(CancellationToken ct)
+    internal async Task SweepAsync(CancellationToken ct)
     {
-        var all = instances.GetAll();
+        var all = engine.Instances();
         if (all is null || all.Count == 0) return;
 
         var recorded = RecordedCheckTimes();
@@ -106,9 +105,9 @@ internal sealed class UpdateCheckSweep(
         var times = new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
         try
         {
-            foreach (var (name, reading) in instances.GetAllStatuses(fast: true))
+            foreach (var (name, version) in engine.RecordedVersions())
             {
-                if (reading.Value?.Version.CheckedAt is { } at)
+                if (version.CheckedAt is { } at)
                     times[name] = at;
             }
         }
@@ -151,23 +150,17 @@ internal sealed class UpdateCheckSweep(
     {
         try
         {
-            var result = await Task
-                .Run(() => instances.CheckUpdate(name, emit: true,
-                    actor: Provenance.Actor, origin: Provenance.Origin), ct)
-                .ConfigureAwait(false);
+            var result = await engine.CheckUpdateAsync(name, ct).ConfigureAwait(false);
 
-            bool ok = result.ExitCode == 0;
+            bool ok = result.IsSuccess;
             if (!ok)
-            {
-                logger.LogWarning("{Instance}: update check failed: {Err}",
-                    name, string.IsNullOrWhiteSpace(result.Stderr) ? "no detail" : result.Stderr.Trim());
-            }
+                logger.LogWarning("{Instance}: update check failed: {Err}", name, result.Message);
 
             registry.Update(name, s => s with
             {
                 LastUpdateCheckUtc = DateTimeOffset.UtcNow,
                 LastUpdateCheckOk = ok,
-                LastUpdateCheckMessage = ok ? null : EngineDetail.Summarize(result.Stderr),
+                LastUpdateCheckMessage = ok ? null : result.Message,
             });
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

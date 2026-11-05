@@ -33,8 +33,9 @@
     <!-- Configuration, hosting, logging and options all arrive with the ASP.NET Core framework
          reference the Web SDK carries, so naming them here would pin a second copy of what is
          already in the shared framework. -->
-    <PackageReference Include="TheKrystalShip.KGSM.Lib" Version="9.5.0-dev.4" />
-    <PackageReference Include="TheKrystalShip.KGSM.Journal" Version="2.5.0-dev.3" />
+    <PackageReference Include="TheKrystalShip.KGSM.Engine" Version="4.0.0-dev.7" />
+    <PackageReference Include="TheKrystalShip.KGSM.Watchdog.Client" Version="1.0.0-dev.2" />
+    <PackageReference Include="TheKrystalShip.KGSM.Journal" Version="2.6.0-dev.1" />
 
     <!-- The people the control routes admit: the access token the node relays is checked against the
          sign-in provider's keys, and the actions it lists decide what the person may tell this daemon. -->

@@ -1,4 +1,4 @@
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -16,7 +16,7 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 internal sealed record WindowPlan(string Signature, DateTime? NextUtc);
 
 /// <summary>
-/// A window as this daemon will act on it: what kgsm-lib read, plus what this host permits.
+/// A window as this daemon will act on it: what the engine contracts read, plus what this host permits.
 /// </summary>
 /// <param name="Window">The window as written.</param>
 /// <param name="Valid">Whether this daemon will fire it.</param>
@@ -25,7 +25,7 @@ internal sealed record WindowPlan(string Signature, DateTime? NextUtc);
 internal sealed record ReadWindow(MaintenanceWindow Window, bool Valid, string? Error, TimeSpan Period);
 
 /// <summary>
-/// The arithmetic around a window that is this daemon's rather than kgsm-lib's: whether this host
+/// The arithmetic around a window that is this daemon's rather than the engine contracts': whether this host
 /// will fire it, how far apart its fires are, and how late one may be and still run.
 /// </summary>
 internal static class WindowPlanner
@@ -111,7 +111,7 @@ internal static class WindowPlanner
     /// the instant before dispatch — so a container's nightly archive still happens even though the
     /// restart beside it never can.
     /// </remarks>
-    /// <param name="window">The window kgsm-lib read.</param>
+    /// <param name="window">The window the engine contracts read.</param>
     /// <param name="catalog">The tasks this daemon can run.</param>
     /// <param name="minimumPeriodMinutes">The shortest period this host permits a window to have.</param>
     /// <param name="tz">The instance's timezone, for measuring an appointment's period.</param>

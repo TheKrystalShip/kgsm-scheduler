@@ -1,5 +1,6 @@
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Models.Enums;
+using TheKrystalShip.KGSM.Watchdog.Model;
+using TheKrystalShip.KGSM.Engine.Contracts.Blueprints;
+
 
 namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 
@@ -11,20 +12,13 @@ namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 /// </summary>
 public class RestartGateTests
 {
-    private static WatchdogInstanceState State(string phase, bool populated = true,
+    private static InstanceState State(string phase, bool populated = true,
         int restarts = 0, string reason = "") =>
-        new()
-        {
-            Name = "factorio-01",
-            Desired = "running",
-            Phase = phase,
-            Populated = populated,
-            Restarts = restarts,
-            Reason = reason,
-        };
+        new("factorio-01", Desired: "running", Enabled: false, Populated: populated, Pid: null,
+            CgroupPath: "", Phase: phase, Restarts: restarts, Reason: reason);
 
     private static Task<TaskGate> Evaluate(
-        WatchdogClientStub watchdog, InstanceRuntime? runtime = InstanceRuntime.Native) =>
+        WatchdogClientStub watchdog, BlueprintRuntime? runtime = BlueprintRuntime.Native) =>
         RestartGate.EvaluateAsync(watchdog, "factorio-01", runtime, CancellationToken.None);
 
     // ---- what the gate lets through ----------------------------------------
@@ -142,7 +136,7 @@ public class RestartGateTests
     {
         var watchdog = WatchdogClientStub.Answering(null);
 
-        var decision = await Evaluate(watchdog, InstanceRuntime.Container);
+        var decision = await Evaluate(watchdog, BlueprintRuntime.Container);
 
         // Declined, not failed: nothing was owed, and the rest of the window still runs — which is
         // what keeps a container's nightly archive from being lost to the restart beside it.

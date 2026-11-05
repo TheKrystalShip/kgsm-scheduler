@@ -1,6 +1,6 @@
-using TheKrystalShip.KGSM.Core.Interfaces;
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Instances;
+using TheKrystalShip.KGSM.Watchdog.Client;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -79,14 +79,14 @@ internal sealed class WindowProgress
 /// <param name="Name">The instance's id, as kgsm and the watchdog know it.</param>
 /// <param name="Instance">The instance's configuration, read on the tick that scheduled this run.</param>
 /// <param name="Window">The window this run belongs to.</param>
-/// <param name="Instances">The engine.</param>
+/// <param name="Engine">The engine.</param>
 /// <param name="Watchdog">The daemon every disruptive act is issued through.</param>
 /// <param name="Progress">What the tasks before this one already did to the instance.</param>
 internal sealed record MaintenanceContext(
     string Name,
-    Instance Instance,
+    InstanceConfig Instance,
     MaintenanceWindow Window,
-    IInstanceService Instances,
+    IEngine Engine,
     IWatchdogClient Watchdog,
     WindowProgress Progress);
 
@@ -95,7 +95,7 @@ internal sealed record MaintenanceContext(
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>This is the extension point.</b> A task is one class here, one grammar token in kgsm-lib's
+/// <b>This is the extension point.</b> A task is one class here, one grammar token in the engine contracts'
 /// parser, one entry in the API's token set and one toggle in the Control Panel. It adds no
 /// cadence, no plan, and no field on the status socket — a window already reports one row per task
 /// it ran.

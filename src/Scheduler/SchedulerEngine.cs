@@ -1,10 +1,9 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TheKrystalShip.KGSM.Core.Interfaces;
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
 using TheKrystalShip.KGSM.Lifecycle;
+using TheKrystalShip.KGSM.Watchdog.Client;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -13,7 +12,7 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 /// standing appointment, announces the ones approaching, and opens the ones that have come due.
 /// </summary>
 internal sealed class SchedulerEngine(
-    IInstanceService instances,
+    IEngine engine,
     IWatchdogClient watchdog,
     LeafLifecycle lifecycle,
     IOptions<SchedulerOptions> options,
@@ -96,7 +95,7 @@ internal sealed class SchedulerEngine(
 
     private async Task TickAsync(CancellationToken ct)
     {
-        var all = instances.GetAll();
+        var all = engine.Instances();
 
         if (all is null)
         {

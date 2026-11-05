@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
-using TheKrystalShip.KGSM.Core.Interfaces;
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Backups;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -22,9 +21,6 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 /// </remarks>
 internal sealed class BackupTask(ILogger<BackupTask> logger) : IMaintenanceTask
 {
-    /// <summary>The retention used when the instance declares none.</summary>
-    private const int DefaultRetention = 3;
-
     public string Name => MaintenanceTask.Backup.ToToken();
 
     /// <summary>Nobody is interrupted by an archive, so a backup-only window is never announced.</summary>
@@ -37,19 +33,16 @@ internal sealed class BackupTask(ILogger<BackupTask> logger) : IMaintenanceTask
     {
         logger.LogInformation("{Instance}: creating scheduled backup", ctx.Name);
 
-        KgsmResult result = await Task
-            .Run(() => ctx.Instances.CreateBackup(ctx.Name, actor: Provenance.Actor,
-                origin: Provenance.Origin, reason: BackupReason.Scheduled), ct)
-            .ConfigureAwait(false);
+        var result = await ctx.Engine.CreateBackupAsync(ctx.Name, BackupReason.Scheduled, ct).ConfigureAwait(false);
 
-        if (result.ExitCode != 0)
+        if (!result.IsSuccess)
         {
-            string detail = EngineDetail.Summarize(result.Stderr) ?? "the engine gave no detail";
+            string detail = result.Message;
             logger.LogWarning("{Instance}: scheduled backup failed: {Err}", ctx.Name, detail);
             return TaskOutcome.Failed(detail);
         }
 
-        int retention = ctx.Instance.BackupRetention ?? DefaultRetention;
+        int retention = ctx.Instance.BackupRetention;
         if (retention <= 0)
         {
             return TaskOutcome.Ok();
@@ -59,19 +52,16 @@ internal sealed class BackupTask(ILogger<BackupTask> logger) : IMaintenanceTask
         // backup to make room for something that was never written. The prune keeps that many
         // PRUNABLE archives — pinned ones are skipped and consume no slot, so an operator protecting
         // an archive never shrinks the window this window maintains.
-        KgsmResult prune = await Task
-            .Run(() => ctx.Instances.PruneBackups(ctx.Name, retention, actor: Provenance.Actor,
-                origin: Provenance.Origin), ct)
-            .ConfigureAwait(false);
+        var prune = await ctx.Engine.PruneBackupsAsync(ctx.Name, retention, ct).ConfigureAwait(false);
 
-        if (prune.ExitCode == 0)
+        if (prune.IsSuccess)
         {
             return TaskOutcome.Ok();
         }
 
         // The archive is the job and it landed, so this is not a failed backup. It is also not
         // nothing: a rotation that stops running fills a disk quietly, so it travels on the record.
-        string pruneDetail = EngineDetail.Summarize(prune.Stderr) ?? "the engine gave no detail";
+        string pruneDetail = prune.Message;
         logger.LogWarning("{Instance}: backup prune failed: {Err}", ctx.Name, pruneDetail);
         return TaskOutcome.Ok($"the archive was taken; the prune failed: {pruneDetail}");
     }

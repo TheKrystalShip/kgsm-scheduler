@@ -1,4 +1,4 @@
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 

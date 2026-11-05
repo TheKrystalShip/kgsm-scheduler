@@ -1,8 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Models.Enums;
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Blueprints;
 
 namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 
@@ -14,15 +13,15 @@ public sealed class UpdateTaskTests
 {
     private const string Name = "factorio-01";
 
-    private readonly InstanceServiceStub _instances = new();
+    private readonly EngineStub _instances = new();
 
     private static MaintenanceContext Context(
-        InstanceServiceStub instances,
+        EngineStub instances,
         WatchdogClientStub watchdog,
         WindowProgress? progress = null,
-        InstanceRuntime runtime = InstanceRuntime.Native) =>
+        BlueprintRuntime runtime = BlueprintRuntime.Native) =>
         new(Name,
-            new Instance { Name = Name, DisplayName = "Factorio", Runtime = runtime },
+            TestInstances.Config() with { Name = Name, DisplayName = "Factorio", Runtime = runtime },
             MaintenanceWindowParser.ParseWindow("daily@04:00/update"),
             instances,
             watchdog,
@@ -50,7 +49,7 @@ public sealed class UpdateTaskTests
         Assert.Contains("no newer build stands", gate.Message);
         Assert.Contains("1.1.110", gate.Message);
         // The reading is taken off disk: the fleet read is the one that touches no network.
-        Assert.Equal(["statuses:fast=True"], _instances.Calls);
+        Assert.Equal(["versions"], _instances.Calls);
     }
 
     [Fact]
@@ -103,7 +102,7 @@ public sealed class UpdateTaskTests
 
         TaskGate gate = await NewTask().GateAsync(
             Context(_instances, WatchdogClientStub.Answering(WatchdogClientStub.Running(Name)),
-                runtime: InstanceRuntime.Container),
+                runtime: BlueprintRuntime.Container),
             default);
 
         Assert.Equal(TaskGateOutcome.Skip, gate.Outcome);
@@ -124,7 +123,7 @@ public sealed class UpdateTaskTests
 
         Assert.Equal(MaintenanceOutcomes.Ok, outcome.Outcome);
         Assert.Equal(
-            [$"park:{Name}:scheduler", $"update:{Name}:system:scheduler:system", $"release:{Name}:scheduler"],
+            [$"park:{Name}:scheduler", $"update:{Name}", $"release:{Name}:scheduler"],
             _instances.Calls);
         Assert.True(progress.InstanceCycled);
     }
@@ -186,7 +185,7 @@ public sealed class UpdateTaskTests
         TaskOutcome outcome = await NewTask().RunAsync(Context(_instances, watchdog, progress), default);
 
         Assert.Equal(MaintenanceOutcomes.Ok, outcome.Outcome);
-        Assert.Equal([$"park:{Name}:scheduler", $"update:{Name}:system:scheduler:system"], _instances.Calls);
+        Assert.Equal([$"park:{Name}:scheduler", $"update:{Name}"], _instances.Calls);
         Assert.False(progress.InstanceCycled);
     }
 

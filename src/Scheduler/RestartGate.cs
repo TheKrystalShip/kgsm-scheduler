@@ -1,6 +1,7 @@
-using TheKrystalShip.KGSM.Core.Interfaces;
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Models.Enums;
+using TheKrystalShip.KGSM.Watchdog.Client;
+using TheKrystalShip.KGSM.Watchdog.Model;
+using TheKrystalShip.KGSM.Engine.Contracts.Blueprints;
+
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -33,22 +34,22 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 internal static class RestartGate
 {
     public static async Task<TaskGate> EvaluateAsync(
-        IWatchdogClient watchdog, string name, InstanceRuntime? runtime, CancellationToken ct)
+        IWatchdogClient watchdog, string name, BlueprintRuntime? runtime, CancellationToken ct)
     {
         // Docker supervises container instances, and this daemon dispatches every restart through the
         // watchdog. Asked about one the watchdog answers 404, which is the same answer it gives for a
         // stopped native instance — so the runtime is read here rather than letting a restart that
         // can never be honoured report itself as a server that happened to be down.
-        if (runtime == InstanceRuntime.Container)
+        if (runtime == BlueprintRuntime.Container)
             return TaskGate.Skip(
                 "not dispatched: this is a container instance, and the watchdog this daemon "
                 + "dispatches through supervises only native ones");
 
-        WatchdogInstanceState? state;
+        InstanceState? state;
 
         try
         {
-            state = await watchdog.GetStatusAsync(name, ct).ConfigureAwait(false);
+            state = await watchdog.StatusAsync(name, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -67,7 +68,7 @@ internal static class RestartGate
     }
 
     /// <summary>Reads one watchdog state into a verdict.</summary>
-    public static TaskGate Decide(WatchdogInstanceState? state)
+    public static TaskGate Decide(InstanceState? state)
     {
         // Not tracked and not live: the daemon answers 404 for exactly that pair, so this is a
         // measured "nothing is running", not an absence of information.
@@ -99,7 +100,7 @@ internal static class RestartGate
         return TaskGate.Dispatch;
     }
 
-    private static bool Phase(WatchdogInstanceState state, string phase) =>
+    private static bool Phase(InstanceState state, string phase) =>
         string.Equals(state.Phase, phase, StringComparison.OrdinalIgnoreCase);
 
     private static string Because(string message, string? reason) =>

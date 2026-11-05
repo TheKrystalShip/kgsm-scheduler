@@ -1,6 +1,6 @@
 using System.Globalization;
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Instances;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -144,9 +144,9 @@ internal static class AnnouncementPlan
     /// back, not a number nothing measured.
     /// </para>
     /// </remarks>
-    public static string Resolve(string template, Instance instance, int? minutes, string? reason = null)
+    public static string Resolve(string template, InstanceConfig instance, int? minutes, string? reason = null)
     {
-        string resolved = template.Replace("{instance}", instance.DisplayName, StringComparison.Ordinal);
+        string resolved = template.Replace("{instance}", instance.Label, StringComparison.Ordinal);
 
         if (reason is not null)
         {
@@ -163,12 +163,16 @@ internal static class AnnouncementPlan
     /// its game declares a console broadcast command.
     /// </summary>
     /// <remarks>
-    /// A game with no <see cref="Instance.BroadcastCommand"/> is not a misconfiguration: several
+    /// A game with no <see cref="InstanceConfig.BroadcastCommand"/> is not a misconfiguration: several
     /// have no console command surface, and several more expose one only on a channel the engine
     /// does not write to. The maintenance still happens; it simply happens unannounced.
     /// </remarks>
-    public static bool CanAnnounce(Instance instance) =>
-        BroadcastCommand.IsSupported(instance.BroadcastCommand)
+    public static bool CanAnnounce(InstanceConfig instance) =>
+        SupportsBroadcast(instance.BroadcastCommand)
         && ParseLeadMinutes(instance.AnnounceLeadMinutes).Count > 0
         && !string.IsNullOrWhiteSpace(instance.AnnounceMaintenanceMessage);
+
+    /// <summary>Whether a game's broadcast command can carry a message: it names the <c>{message}</c> slot.</summary>
+    internal static bool SupportsBroadcast(string? template) =>
+        !string.IsNullOrWhiteSpace(template) && template.Contains("{message}", StringComparison.Ordinal);
 }

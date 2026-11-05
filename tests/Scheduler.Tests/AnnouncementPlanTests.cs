@@ -1,5 +1,4 @@
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
 
 namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 
@@ -148,7 +147,7 @@ public class AnnouncementPlanTests
     [Fact]
     public void Resolve_SubstitutesTheLeadAndTheLabel()
     {
-        var instance = new Instance { Name = "mc-01", DisplayName = "Survival" };
+        var instance = TestInstances.Config() with { Name = "mc-01", DisplayName = "Survival" };
 
         Assert.Equal(
             "Survival restarts in 5 min",
@@ -158,7 +157,7 @@ public class AnnouncementPlanTests
     [Fact]
     public void Resolve_SubstitutesWhatTheWindowIsAboutToDo()
     {
-        var instance = new Instance { Name = "mc-01", DisplayName = "Survival" };
+        var instance = TestInstances.Config() with { Name = "mc-01", DisplayName = "Survival" };
 
         Assert.Equal(
             "Survival is updating and restarting in 5 min",
@@ -171,7 +170,7 @@ public class AnnouncementPlanTests
     [Fact]
     public void Resolve_LeavesTheReasonAloneWhenThereIsNoneToState()
     {
-        var instance = new Instance { Name = "mc-01", DisplayName = "Survival" };
+        var instance = TestInstances.Config() with { Name = "mc-01", DisplayName = "Survival" };
 
         Assert.Equal(
             "Survival: {reason} cancelled",
@@ -183,7 +182,7 @@ public class AnnouncementPlanTests
     {
         // A cancellation describes no distance, so a template carrying {minutes} keeps it rather
         // than being handed a number that would be a fabrication.
-        var instance = new Instance { Name = "mc-01", DisplayName = "Survival" };
+        var instance = TestInstances.Config() with { Name = "mc-01", DisplayName = "Survival" };
 
         Assert.Equal(
             "Survival: restart cancelled ({minutes})",
@@ -195,7 +194,7 @@ public class AnnouncementPlanTests
     {
         // {message} belongs to the engine's substitution into the blueprint template, which happens
         // after this one. Two steps, different placeholders, different owners.
-        var instance = new Instance { Name = "mc-01", DisplayName = "Survival" };
+        var instance = TestInstances.Config() with { Name = "mc-01", DisplayName = "Survival" };
 
         Assert.Equal("say {message} in 5", AnnouncementPlan.Resolve("say {message} in {minutes}", instance, 5));
     }
@@ -205,7 +204,7 @@ public class AnnouncementPlanTests
     [Fact]
     public void CanAnnounce_WhenTheGameDeclaresACommandAndTheInstanceDeclaresLeads()
     {
-        Assert.True(AnnouncementPlan.CanAnnounce(new Instance
+        Assert.True(AnnouncementPlan.CanAnnounce(TestInstances.Config() with
         {
             BroadcastCommand = "say {message}",
             AnnounceLeadMinutes = "15,5",
@@ -218,7 +217,7 @@ public class AnnouncementPlanTests
     {
         // Several games have no console command surface, and several more expose one only on a
         // channel the engine does not write to. The restart still happens, unannounced.
-        Assert.False(AnnouncementPlan.CanAnnounce(new Instance
+        Assert.False(AnnouncementPlan.CanAnnounce(TestInstances.Config() with
         {
             BroadcastCommand = "",
             AnnounceLeadMinutes = "15,5",
@@ -230,7 +229,7 @@ public class AnnouncementPlanTests
     public void CanAnnounce_IsFalseWithNoLeadTimes()
     {
         // The default. A server addressing the people on it is opt-in.
-        Assert.False(AnnouncementPlan.CanAnnounce(new Instance
+        Assert.False(AnnouncementPlan.CanAnnounce(TestInstances.Config() with
         {
             BroadcastCommand = "say {message}",
             AnnounceLeadMinutes = "",
@@ -241,7 +240,7 @@ public class AnnouncementPlanTests
     [Fact]
     public void CanAnnounce_IsFalseWithNothingToSay()
     {
-        Assert.False(AnnouncementPlan.CanAnnounce(new Instance
+        Assert.False(AnnouncementPlan.CanAnnounce(TestInstances.Config() with
         {
             BroadcastCommand = "say {message}",
             AnnounceLeadMinutes = "15",

@@ -1,5 +1,6 @@
-using TheKrystalShip.KGSM.Core.Interfaces;
-using TheKrystalShip.KGSM.Core.Models;
+using TheKrystalShip.KGSM.Watchdog.Client;
+using TheKrystalShip.KGSM.Watchdog.Model;
+
 
 namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 
@@ -10,40 +11,28 @@ namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 /// </summary>
 internal sealed class WatchdogClientStub : IWatchdogClient
 {
-    private readonly WatchdogInstanceState? _state;
+    private readonly InstanceState? _state;
     private readonly bool _reachable;
 
-    private WatchdogClientStub(WatchdogInstanceState? state, bool reachable)
+    private WatchdogClientStub(InstanceState? state, bool reachable)
     {
         _state = state;
         _reachable = reachable;
     }
 
-    public static WatchdogClientStub Answering(WatchdogInstanceState? state) => new(state, reachable: true);
+    public static WatchdogClientStub Answering(InstanceState? state) => new(state, reachable: true);
 
     public static WatchdogClientStub Unreachable() => new(null, reachable: false);
 
     /// <summary>Builds a state the gate reads as "restart this".</summary>
-    public static WatchdogInstanceState Running(string name = "factorio-01") => new()
-    {
-        Name = name,
-        Desired = "running",
-        Phase = "running",
-        Populated = true,
-        Restarts = 0,
-        Reason = "",
-    };
+    public static InstanceState Running(string name = "factorio-01") =>
+        new(name, Desired: "running", Enabled: false, Populated: true, Pid: null, CgroupPath: "",
+            Phase: "running", Restarts: 0, Reason: "");
 
     /// <summary>Builds a state nothing will spawn: held stopped, with no live process.</summary>
-    public static WatchdogInstanceState Stopped(string name = "factorio-01") => new()
-    {
-        Name = name,
-        Desired = "stopped",
-        Phase = "stopped",
-        Populated = false,
-        Restarts = 0,
-        Reason = "",
-    };
+    public static InstanceState Stopped(string name = "factorio-01") =>
+        new(name, Desired: "stopped", Enabled: false, Populated: false, Pid: null, CgroupPath: "",
+            Phase: "stopped", Restarts: 0, Reason: "");
 
     /// <summary>How many times the gate asked for a state — a container never gets that far.</summary>
     public int StatusCalls { get; private set; }
@@ -67,9 +56,9 @@ internal sealed class WatchdogClientStub : IWatchdogClient
     public bool RefuseRelease { get; set; }
 
     /// <summary>Players the roster reports, or null for an instance the daemon cannot observe.</summary>
-    public IReadOnlyDictionary<string, WatchdogInstancePresence>? Presence { get; set; }
+    public IReadOnlyDictionary<string, InstancePresence>? Presence { get; set; }
 
-    public Task<WatchdogInstanceState?> GetStatusAsync(string instanceName, CancellationToken cancellationToken = default)
+    public Task<InstanceState?> StatusAsync(string instance, CancellationToken cancellationToken = default)
     {
         StatusCalls++;
 
@@ -79,66 +68,52 @@ internal sealed class WatchdogClientStub : IWatchdogClient
         return Task.FromResult(_state);
     }
 
-    public Task<WatchdogActionResult> RestartAsync(
-        string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default)
+    public Task<ActionResult> RestartAsync(
+        string instance, string? origin = null, CancellationToken cancellationToken = default)
     {
-        Restarts.Add(instanceName);
-        Calls.Add($"restart:{instanceName}:{origin}");
-        return Task.FromResult(new WatchdogActionResult
-        {
-            Instance = instanceName,
-            Ok = !RefuseRestart,
-            Message = RefuseRestart ? "the instance is not running" : "restarted",
-        });
+        Restarts.Add(instance);
+        Calls.Add($"restart:{instance}:{origin}");
+        return Task.FromResult(new ActionResult(instance, !RefuseRestart, RefuseRestart ? "the instance is not running" : "restarted"));
     }
 
-    public Task<WatchdogActionResult> BeginMaintenanceAsync(
-        string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default)
+    public Task<ActionResult> BeginMaintenanceAsync(
+        string instance, string? origin = null, CancellationToken cancellationToken = default)
     {
-        Calls.Add($"park:{instanceName}:{origin}");
-        return Task.FromResult(new WatchdogActionResult
-        {
-            Instance = instanceName,
-            Ok = !RefusePark,
-            Message = RefusePark ? "not running — nothing to park" : "parked for maintenance (scheduler)",
-        });
+        Calls.Add($"park:{instance}:{origin}");
+        return Task.FromResult(new ActionResult(instance, !RefusePark, RefusePark ? "not running — nothing to park" : "parked for maintenance (scheduler)"));
     }
 
-    public Task<WatchdogActionResult> EndMaintenanceAsync(
-        string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default)
+    public Task<ActionResult> EndMaintenanceAsync(
+        string instance, string? origin = null, CancellationToken cancellationToken = default)
     {
-        Calls.Add($"release:{instanceName}:{origin}");
-        return Task.FromResult(new WatchdogActionResult
-        {
-            Instance = instanceName,
-            Ok = !RefuseRelease,
-            Message = RefuseRelease ? "respawn failed (the node is full)" : "released from maintenance (scheduler)",
-        });
+        Calls.Add($"release:{instance}:{origin}");
+        return Task.FromResult(new ActionResult(instance, !RefuseRelease, RefuseRelease ? "respawn failed (the node is full)" : "released from maintenance (scheduler)"));
     }
 
-    public Task<IReadOnlyDictionary<string, WatchdogInstancePresence>?> GetPlayerPresenceAsync(
+    public Task<IReadOnlyDictionary<string, InstancePresence>?> PlayersAsync(
         CancellationToken cancellationToken = default) => Task.FromResult(Presence);
 
     public void Dispose() { }
 
     private static T Unused<T>() => throw new NotSupportedException("not exercised by these tests");
 
+    public Task<WatchdogHealth> HealthAsync(CancellationToken cancellationToken = default) => Unused<Task<WatchdogHealth>>();
     public Task<bool> IsReadyAsync(CancellationToken cancellationToken = default) => Unused<Task<bool>>();
-    public Task<WatchdogReadyState?> GetReadyAsync(CancellationToken cancellationToken = default) => Unused<Task<WatchdogReadyState?>>();
-    public Task<WatchdogActionResult> StartAsync(string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<WatchdogActionResult> StopAsync(string instanceName, string origin = "scheduler", CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<WatchdogActionResult> EnableAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<WatchdogActionResult> DisableAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<IReadOnlyList<string>> GetEnabledNamesAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<string>>>();
-    public Task<WatchdogActionResult> ForgetAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<WatchdogActionResult> SetCpuPriorityAsync(string instanceName, string priority, CancellationToken cancellationToken = default) => Unused<Task<WatchdogActionResult>>();
-    public Task<IReadOnlyList<WatchdogInstanceState>> ListAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<WatchdogInstanceState>>>();
-    public Task<IReadOnlyList<WatchdogRunTimes>> GetRunTimesAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<WatchdogRunTimes>>>();
-    public IAsyncEnumerable<string> FollowConsoleAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<IAsyncEnumerable<string>>();
-    public Task<IReadOnlyList<string>> GetConsoleTailAsync(string instanceName, int lines, CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<string>>>();
-    public Task<IReadOnlyList<WatchdogConsoleRun>> GetConsoleRunsAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<WatchdogConsoleRun>>>();
-    public Task<IReadOnlyList<string>> GetConsoleRunTailAsync(string instanceName, int lines, int run, CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<string>>>();
-    public Task<WatchdogConsoleWindow> GetConsoleWindowAsync(string instanceName, int lines, int run, long endOffset, CancellationToken cancellationToken = default) => Unused<Task<WatchdogConsoleWindow>>();
-    public Task<WatchdogConsoleDownload?> OpenConsoleDownloadAsync(string instanceName, int run, CancellationToken cancellationToken = default) => Unused<Task<WatchdogConsoleDownload?>>();
-    public Task<WatchdogUpnpList?> GetUpnpAsync(string instanceName, CancellationToken cancellationToken = default) => Unused<Task<WatchdogUpnpList?>>();
+    public Task<IReadOnlyList<InstanceState>> ListAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<InstanceState>>>();
+    public Task<IReadOnlyList<InstanceRunTimes>> RunTimesAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<InstanceRunTimes>>>();
+    public Task<IReadOnlyList<string>> EnabledAsync(CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<string>>>();
+    public Task<WatchdogVersionInfo> VersionAsync(CancellationToken cancellationToken = default) => Unused<Task<WatchdogVersionInfo>>();
+    public Task<ActionResult> StartAsync(string instance, bool force = false, string? origin = null, CancellationToken cancellationToken = default) => Unused<Task<ActionResult>>();
+    public Task<ActionResult> StopAsync(string instance, string? origin = null, CancellationToken cancellationToken = default) => Unused<Task<ActionResult>>();
+    public Task<ActionResult> EnableAsync(string instance, CancellationToken cancellationToken = default) => Unused<Task<ActionResult>>();
+    public Task<ActionResult> DisableAsync(string instance, CancellationToken cancellationToken = default) => Unused<Task<ActionResult>>();
+    public Task<ActionResult> ForgetAsync(string instance, CancellationToken cancellationToken = default) => Unused<Task<ActionResult>>();
+    public Task<ActionResult> SetCpuPriorityAsync(string instance, string priority, CancellationToken cancellationToken = default) => Unused<Task<ActionResult>>();
+    public Task<IReadOnlyList<ConsoleRun>> ConsoleRunsAsync(string instance, CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<ConsoleRun>>>();
+    public Task<ConsoleWindow> ConsoleWindowAsync(string instance, int lines, int run = 0, long endOffset = -1, CancellationToken cancellationToken = default) => Unused<Task<ConsoleWindow>>();
+    public Task<IReadOnlyList<string>> ConsoleTailAsync(string instance, int lines, int run = 0, CancellationToken cancellationToken = default) => Unused<Task<IReadOnlyList<string>>>();
+    public IAsyncEnumerable<string> FollowConsoleAsync(string instance, CancellationToken cancellationToken = default) => Unused<IAsyncEnumerable<string>>();
+    public Task<ConsoleDownload?> OpenConsoleDownloadAsync(string instance, int run = 0, CancellationToken cancellationToken = default) => Unused<Task<ConsoleDownload?>>();
+    public Task<UpnpListResult?> UpnpAsync(string instance, CancellationToken cancellationToken = default) => Unused<Task<UpnpListResult?>>();
+    public Task<MemoryGateState?> MemoryGateAsync(CancellationToken cancellationToken = default) => Unused<Task<MemoryGateState?>>();
 }

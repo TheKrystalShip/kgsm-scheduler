@@ -7,7 +7,7 @@
     "note": "A single native binary. The host needs no .NET runtime."
   },
   "commands": [
-    { "name": "kgsm", "package": "kgsm", "required": true, "probe": "kgsm --version", "why": "reads each instance's schedule config through kgsm-lib" },
+    { "name": "kgsm", "package": "kgsm", "required": true, "probe": "kgsm --version", "why": "reads each instance's schedule config through the engine core" },
 
     { "name": "curl", "package": "curl", "required": false, "probe": "curl --version", "why": "deploy.sh's health probe asks the daemon's socket for /health, which bash cannot open", "without": "the probe degrades to `systemctl is-active` and says so rather than claiming a stronger check" }
   ],

@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TheKrystalShip.KGSM.Core.Interfaces;
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Models.Enums;
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
+using TheKrystalShip.KGSM.Watchdog.Client;
+using TheKrystalShip.KGSM.Engine.Contracts.Instances;
+using TheKrystalShip.KGSM.Engine.Contracts.Blueprints;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -34,7 +34,7 @@ namespace TheKrystalShip.Kgsm.Scheduler;
 /// </para>
 /// </remarks>
 internal sealed class MaintenanceRunner(
-    IInstanceService instances,
+    IEngine engine,
     IWatchdogClient watchdog,
     ScheduleRegistry registry,
     MaintenanceTaskCatalog catalog,
@@ -60,14 +60,14 @@ internal sealed class MaintenanceRunner(
     /// recorded as having saved are all left out — each is known before the countdown opens, and a countdown
     /// that can only end in a retraction should never have started.
     /// </remarks>
-    public IReadOnlyList<MaintenanceTask> DisruptiveTasks(ReadWindow read, Instance instance)
+    public IReadOnlyList<MaintenanceTask> DisruptiveTasks(ReadWindow read, InstanceConfig instance)
     {
         if (!read.Valid || !options.Value.AllowDisruptiveTasks || Unsaved(instance) is not null) return [];
 
         // Every disruptive task is issued through the watchdog, which supervises native instances
         // alone. The task's own gate declines it either way; this keeps the server from being told
         // about it first.
-        if (instance.Runtime == InstanceRuntime.Container) return [];
+        if (instance.Runtime == BlueprintRuntime.Container) return [];
 
         var disruptive = new List<MaintenanceTask>();
         foreach (MaintenanceTask task in read.Window.Tasks)
@@ -83,7 +83,7 @@ internal sealed class MaintenanceRunner(
     /// Why <paramref name="read"/> would not run on <paramref name="instance"/> if it came due now, or
     /// null when every task it carries may run.
     /// </summary>
-    public string? Blocked(ReadWindow read, Instance instance) => read.Valid ? Unsaved(instance) : null;
+    public string? Blocked(ReadWindow read, InstanceConfig instance) => read.Valid ? Unsaved(instance) : null;
 
     /// <summary>
     /// Why the windows of <paramref name="instance"/> run nothing because no save is on record, or null
@@ -94,7 +94,7 @@ internal sealed class MaintenanceRunner(
     /// window runs, and the engine records who that was. Windows written some other way, such as by
     /// editing the instance's config by hand, record nobody and run nothing until they are saved again.
     /// </remarks>
-    private static string? Unsaved(Instance instance) =>
+    private static string? Unsaved(InstanceConfig instance) =>
         string.IsNullOrWhiteSpace(instance.MaintenanceWindowsAuthor)
             ? "nobody is recorded as having saved these windows; saving them again records who did"
             : null;
@@ -108,7 +108,7 @@ internal sealed class MaintenanceRunner(
     /// coming due on one tick resolve deterministically: the first claims it and the second is
     /// recorded skipped against itself.
     /// </remarks>
-    public void Fire(string name, Instance instance, ReadWindow read)
+    public void Fire(string name, InstanceConfig instance, ReadWindow read)
     {
         string windowId = read.Window.Id;
 
@@ -156,7 +156,7 @@ internal sealed class MaintenanceRunner(
         }, CancellationToken.None);
     }
 
-    private async Task RunAsync(string name, Instance instance, ReadWindow read, CancellationToken ct)
+    private async Task RunAsync(string name, InstanceConfig instance, ReadWindow read, CancellationToken ct)
     {
         string windowId = read.Window.Id;
         DateTimeOffset started = DateTimeOffset.UtcNow;
@@ -166,13 +166,13 @@ internal sealed class MaintenanceRunner(
 
         // One context for the whole window: the tasks are stateless singletons, so this is where
         // what one of them did to the instance is available to the next.
-        var context = new MaintenanceContext(name, instance, read.Window, instances, watchdog, new WindowProgress());
+        var context = new MaintenanceContext(name, instance, read.Window, engine, watchdog, new WindowProgress());
 
         logger.LogInformation("{Instance}: running {Window} ({Tasks}) for {Author}",
             name, windowId, string.Join(", ", read.Window.Tasks.Select(t => t.ToToken())),
             instance.MaintenanceWindowsAuthorName ?? instance.MaintenanceWindowsAuthor);
 
-        // Canonical order — backup, then update, then restart — is the order kgsm-lib returns the
+        // Canonical order — backup, then update, then restart — is the order the engine contracts return the
         // tasks in, whatever order they were written. A backup taken after an update archives the
         // new build instead of the rollback point.
         foreach (MaintenanceTask task in read.Window.Tasks)

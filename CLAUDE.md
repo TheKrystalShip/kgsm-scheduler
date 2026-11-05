@@ -1,8 +1,8 @@
 # CLAUDE.md — kgsm-scheduler
 
-`kgsm-scheduler` is a resident leaf daemon: it reads each instance's maintenance windows from kgsm (via
-`kgsm-lib`), runs them at their appointed time (archiving and updating through kgsm, restarting and parking
-through the watchdog), and sweeps the roster for newer game builds. It depends only on `kgsm-lib` and
+`kgsm-scheduler` is a resident leaf daemon: it reads each instance's maintenance windows from kgsm (through
+the engine core), runs them at their appointed time (archiving and updating through the `kgsm` binary, restarting and parking
+through the watchdog), and sweeps the roster for newer game builds. It depends only on the engine packages and
 degrades honestly without the watchdog. Role, contracts and peers: `../kgsm-docs/components/kgsm-scheduler.md`.
 
 - The window model, grammar, run, tasks, gates and announcing:
@@ -14,9 +14,9 @@ degrades honestly without the watchdog. Role, contracts and peers: `../kgsm-docs
 ## Interop
 
 - Window config (`MaintenanceWindows`, `Timezone`, `BackupRetention` on `Instance`) is read via
-  `IInstanceService` from kgsm-lib; `MaintenanceWindowParser` is the only thing that reads the packed value.
+  `EngineReader` (behind this daemon's `IEngine` seam); `MaintenanceWindowParser` (engine contracts) is the only thing that reads the packed value.
 - Restarts go through `IWatchdogClient.RestartAsync`, the update's park through
-  `BeginMaintenanceAsync`/`EndMaintenanceAsync`. Never shell out to `kgsm.sh` or open the watchdog socket.
+  `BeginMaintenanceAsync`/`EndMaintenanceAsync`. Engine writes run the `kgsm` binary through `EngineCli` as `system:scheduler`; never open the watchdog socket by hand.
 - Update availability is kgsm's fact. The sweep calls `check-update --emit` and the engine decides what is
   worth announcing (`server.update.available`, once per upstream version). Nothing here compares versions,
   remembers an answer or writes an audit row. The `update` task reads the recorded evidence back through

@@ -96,11 +96,11 @@ public class SchedulerOptionsTests
     public void Configured_values_are_bound()
     {
         var o = Bind(
-            (nameof(SchedulerSettings.KgsmPath), "/opt/kgsm/kgsm.sh"),
+            (nameof(SchedulerSettings.KgsmPath), "/opt/kgsm/kgsm"),
             (nameof(SchedulerSettings.PollIntervalSeconds), "23"),
             (nameof(SchedulerSettings.GraceWindowMinutes), "0"));
 
-        Assert.Equal("/opt/kgsm/kgsm.sh", o.KgsmPath);
+        Assert.Equal("/opt/kgsm/kgsm", o.KgsmPath);
         Assert.Equal(23, o.PollIntervalSeconds);
         Assert.Equal(0, o.GraceWindowMinutes);
     }
@@ -187,7 +187,7 @@ public class SchedulerOptionsTests
     [Fact]
     public void Written_paths_are_trimmed()
     {
-        Assert.Equal("/opt/kgsm/kgsm.sh",
-            Bind((nameof(SchedulerSettings.KgsmPath), "  /opt/kgsm/kgsm.sh  ")).KgsmPath);
+        Assert.Equal("/opt/kgsm/kgsm",
+            Bind((nameof(SchedulerSettings.KgsmPath), "  /opt/kgsm/kgsm  ")).KgsmPath);
     }
 }

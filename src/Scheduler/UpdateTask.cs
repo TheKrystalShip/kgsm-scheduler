@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TheKrystalShip.KGSM.Core.Interfaces;
-using TheKrystalShip.KGSM.Core.Models;
-using TheKrystalShip.KGSM.Core.Models.Enums;
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
+using TheKrystalShip.KGSM.Watchdog.Model;
+using TheKrystalShip.KGSM.Engine.Contracts.Instances;
+using TheKrystalShip.KGSM.Engine.Contracts.Blueprints;
 
 namespace TheKrystalShip.Kgsm.Scheduler;
 
@@ -57,15 +57,15 @@ internal sealed class UpdateTask(IOptions<SchedulerOptions> options, ILogger<Upd
         // The engine's container update pulls an image rather than a build, and the park every
         // disruptive task runs behind belongs to the watchdog, which supervises native instances
         // alone. Declining leaves the archive written beside it in the same window still firing.
-        if (ctx.Instance.Runtime == InstanceRuntime.Container)
+        if (ctx.Instance.Runtime == BlueprintRuntime.Container)
             return TaskGate.Skip(
                 "not dispatched: this is a container instance, and the watchdog this daemon "
                 + "parks through supervises only native ones");
 
-        VersionInfo? version;
+        InstanceVersion? version;
         try
         {
-            version = await Task.Run(() => Recorded(ctx.Instances, ctx.Name), ct).ConfigureAwait(false);
+            version = ctx.Engine.RecordedVersions().GetValueOrDefault(ctx.Name);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -99,7 +99,7 @@ internal sealed class UpdateTask(IOptions<SchedulerOptions> options, ILogger<Upd
 
     public async Task<TaskOutcome> RunAsync(MaintenanceContext ctx, CancellationToken ct)
     {
-        WatchdogActionResult park = await ctx.Watchdog
+        ActionResult park = await ctx.Watchdog
             .BeginMaintenanceAsync(ctx.Name, Provenance.Leaf, ct)
             .ConfigureAwait(false);
 
@@ -124,7 +124,7 @@ internal sealed class UpdateTask(IOptions<SchedulerOptions> options, ILogger<Upd
         }
 
         TaskOutcome outcome;
-        WatchdogActionResult? release = null;
+        ActionResult? release = null;
 
         try
         {
@@ -161,17 +161,15 @@ internal sealed class UpdateTask(IOptions<SchedulerOptions> options, ILogger<Upd
     {
         logger.LogInformation("{Instance}: applying the update", ctx.Name);
 
-        KgsmResult result = await Task
-            .Run(() => ctx.Instances.Update(ctx.Name, actor: Provenance.Actor, origin: Provenance.Origin), ct)
-            .ConfigureAwait(false);
+        var result = await ctx.Engine.UpdateAsync(ctx.Name, ct).ConfigureAwait(false);
 
-        if (result.ExitCode == 0)
+        if (result.IsSuccess)
         {
             logger.LogInformation("{Instance}: update ok", ctx.Name);
             return TaskOutcome.Ok();
         }
 
-        string detail = EngineDetail.Summarize(result.Stderr) ?? "the engine gave no detail";
+        string detail = result.Message;
         logger.LogWarning("{Instance}: update failed: {Err}", ctx.Name, detail);
         return TaskOutcome.Failed(detail);
     }
@@ -189,10 +187,10 @@ internal sealed class UpdateTask(IOptions<SchedulerOptions> options, ILogger<Upd
     /// </remarks>
     private static async Task<bool> SpawnsNothingAsync(MaintenanceContext ctx, CancellationToken ct)
     {
-        WatchdogInstanceState? state;
+        InstanceState? state;
         try
         {
-            state = await ctx.Watchdog.GetStatusAsync(ctx.Name, ct).ConfigureAwait(false);
+            state = await ctx.Watchdog.StatusAsync(ctx.Name, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -207,24 +205,6 @@ internal sealed class UpdateTask(IOptions<SchedulerOptions> options, ILogger<Upd
 
         return !state.Populated
             && !string.Equals(state.Desired, "running", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// The version record the engine keeps beside the instance, answered off disk.
-    /// </summary>
-    /// <remarks>
-    /// The fleet read is the one call kgsm exposes that touches no network: it answers every
-    /// instance from what the last real check recorded, which is exactly the reading this gate is
-    /// after. An instance whose status could not be read yields nothing rather than a fabricated
-    /// "up to date".
-    /// </remarks>
-    private static VersionInfo? Recorded(IInstanceService instances, string name)
-    {
-        Dictionary<string, Reading<InstanceRuntimeStatus>> statuses = instances.GetAllStatuses(fast: true);
-
-        return statuses.TryGetValue(name, out Reading<InstanceRuntimeStatus>? reading) && reading.IsMeasured
-            ? reading.Value?.Version
-            : null;
     }
 
     private static string Or(string? version) =>

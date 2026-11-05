@@ -73,7 +73,7 @@ kgsm config and is read fresh on every poll:
 | `announce_maintenance_message` | what is said, with `{instance}`, `{minutes}` and `{reason}` |
 | `announce_maintenance_cancelled_message` | what is said when an announced window does not happen |
 
-The grammar, and what makes a window valid, are `kgsm-lib`'s
+The grammar, and what makes a window valid, are the engine contracts'
 (`TheKrystalShip.KGSM.Core.Scheduling`). What *this host* additionally refuses — a period under its
 floor, a task it does not run, anything disruptive on a container instance — is in `CLAUDE.md`
 under **What this host will fire**.

@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging.Abstractions;
-using TheKrystalShip.KGSM.Core.Scheduling;
+using TheKrystalShip.KGSM.Engine.Contracts.Scheduling;
 
 namespace TheKrystalShip.Kgsm.Scheduler.Tests;
 
 /// <summary>
-/// What this daemon decides about a window on top of what kgsm-lib read: whether it will fire it,
+/// What this daemon decides about a window on top of what the engine contracts read: whether it will fire it,
 /// when its standing target becomes due, and how late a fire may be.
 /// </summary>
 public class WindowPlannerTests
@@ -119,7 +119,7 @@ public class WindowPlannerTests
         Assert.Null(read.Error);
     }
 
-    // The parse error travels rather than being replaced by this daemon's own wording — kgsm-lib
+    // The parse error travels rather than being replaced by this daemon's own wording — the engine contracts
     // names the offending text, and that is what an operator needs to find it.
     [Fact]
     public void A_window_that_does_not_parse_carries_the_parser_error()

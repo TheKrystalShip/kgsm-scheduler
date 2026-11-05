@@ -10,9 +10,13 @@ The window model, the run, the tasks, the gate, announcing, the socket and its v
 `PollIntervalSeconds`, holds each window's standing target in its timezone, announces the ones
 approaching, and opens the ones that have come due. A grace guard drops fires too overdue to run, so a
 host that was down does not return to catch-up work. `WindowPlanner` is the pure arithmetic that is this
-daemon's rather than kgsm-lib's: whether this host will fire a window, its period, its grace, its
-standing plan. The grammar, parser and clock are kgsm-lib's (`TheKrystalShip.KGSM.Core.Scheduling`).
+daemon's rather than the engine contracts': whether this host will fire a window, its period, its grace, its
+standing plan. The grammar, parser and clock are the engine contracts' (`TheKrystalShip.KGSM.Engine.Contracts.Scheduling`).
 
+- **`IEngine` is the one door to the engine.** `EngineGateway` reads the roster and the recorded version
+  evidence in-process (`EngineReader`) and runs every act as `system:scheduler`, origin `system`, through
+  `EngineCli`; a failure is the engine's own error report (`EngineResult.Message`), never parsed text.
+  Tests substitute `IEngine` (`EngineStub`) and, for the provenance, `IEngineProcess`.
 - **`ScheduleRegistry` has several writers** (the engine, the runner and `WindowControl` write; `/status`
   reads). Every write is a read-modify-write under one lock, because a run that finishes between ticks and
   the tick itself both write the same record.
@@ -22,7 +26,7 @@ standing plan. The grammar, parser and clock are kgsm-lib's (`TheKrystalShip.KGS
   taking the daemon down.
 - **`UpdateCheckSweep` is a separate interval service**, because a restart fires at a wall-clock time in
   the server's timezone while a sweep runs on an interval with no time of day. It asks every server via
-  `IInstanceService.CheckUpdate(name, emit: true)`, serial and staggered, because each server asks its
+  `IEngine.CheckUpdateAsync` (`check-update --emit`), serial and staggered, because each server asks its
   own upstream and a parallel sweep is N simultaneous steamcmd logins. It skips anything the engine's
   `checked_at` shows checked within half the interval, so restarting the daemon does not re-ask every
   upstream. It is off until a person switches it on (`updateCheckEnabled`). It only reads, as
@@ -54,7 +58,7 @@ interface IMaintenanceTask
 }
 ```
 
-**This is the extension point.** A task is one class here, one grammar token in kgsm-lib's parser, one
+**This is the extension point.** A task is one class here, one grammar token in the engine contracts' parser, one
 entry in the API's token set and one toggle in the Control Panel. It adds no cadence, no plan and no
 field on `/status`.
 
