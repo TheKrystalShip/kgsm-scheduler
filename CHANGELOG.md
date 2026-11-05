@@ -4,12 +4,14 @@ All notable changes to `kgsm-scheduler` are documented here.
 
 ## [Unreleased]
 
+## [6.0.0] - 2026-11-05
+
 ### Changed — the engine is reached through the engine core and the binary
 
 Instance config and the recorded version evidence are read in-process (`TheKrystalShip.KGSM.Engine`
-4.0.0-dev.7); backups, prunes, updates, update checks and announcements run the `kgsm` binary as
+4.0.0); backups, prunes, updates, update checks and announcements run the `kgsm` binary as
 `system:scheduler` through `EngineCli`. The schedule grammar and clock are the engine contracts', the watchdog
-is reached through `TheKrystalShip.KGSM.Watchdog.Client` 1.0.0-dev.2, and the daemon no longer references
+is reached through `TheKrystalShip.KGSM.Watchdog.Client` 1.0.0, and the daemon no longer references
 `TheKrystalShip.KGSM.Lib`. A failure's detail is the engine's error report message.
 
 ### Fixed — journal appends keep every line under concurrent writes (5.1.2)

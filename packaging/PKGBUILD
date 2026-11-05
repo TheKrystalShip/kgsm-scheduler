@@ -22,7 +22,7 @@ groups=('kgsm-node')
 options=('!debug')
 # kgsm-base carries the kgsm service account this unit runs as, the /var/lib/kgsm tree it writes its
 # descriptor and command manifest into, and the preset policy deciding whether it runs here.
-depends=('kgsm-base' 'kgsm' 'kgsm-watchdog' 'systemd' 'glibc')
+depends=('kgsm-base' 'kgsm>=4.0.0' 'kgsm-watchdog' 'systemd' 'glibc')
 backup=('etc/kgsm-scheduler/kgsm-scheduler.env')
 install="${pkgname}.install"
 
